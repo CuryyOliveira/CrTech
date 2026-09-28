@@ -1,0 +1,36 @@
+{
+  "appId": "br.com.conferenciarapida.app",
+  "appName": "Conferência Rápida",
+  "webDir": "www",
+  "backgroundColor": "#fdfcfb",
+  "server": {
+    "url": "https://conferenciarapida.com.br",
+    "errorPath": "offline.html",
+    "cleartext": false,
+    "allowNavigation": [
+      "conferenciarapida.com.br",
+      "*.conferenciarapida.com.br",
+      "conferenciamat.lovable.app",
+      "oauth.lovable.app",
+      "lovable.dev",
+      "*.supabase.co",
+      "accounts.google.com",
+      "*.mercadopago.com",
+      "*.mercadopago.com.br",
+      "*.mercadolivre.com.br",
+      "*.mercadolibre.com",
+      "*.mlstatic.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "LIGHT"
+    }
+  }
+}

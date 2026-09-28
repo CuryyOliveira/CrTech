@@ -1,0 +1,35 @@
+import { createClient } from '@supabase/supabase-js';
+const url = process.env.SUPABASE_URL, svc = process.env.SUPABASE_SERVICE_ROLE_KEY, pub = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const hdr = (key) => ({ global: { fetch: (i, init) => { const h = new Headers(init?.headers); if (key.startsWith('sb_') && h.get('Authorization') === `Bearer ${key}`) h.delete('Authorization'); h.set('apikey', key); return fetch(i, { ...init, headers: h }); } }, auth: { persistSession: false, autoRefreshToken: false } });
+const admin = createClient(url, svc, hdr(svc));
+const stamp = Date.now();
+const users = [];
+async function mk(email) {
+  const pass = 'Teste@' + stamp;
+  const { data, error } = await admin.auth.admin.createUser({ email, password: pass, email_confirm: true, user_metadata: { nome: email.split('@')[0] } });
+  if (error) throw error; users.push(data.user.id);
+  return { id: data.user.id, email, pass };
+}
+const u1 = await mk(`f12.novo.${stamp}@teste.local`);
+console.log('user criado', u1.id, 'created_at ok');
+const c1 = createClient(url, pub, hdr(pub));
+const { data: sess, error: e1 } = await c1.auth.signInWithPassword({ email: u1.email, password: u1.pass });
+if (e1) throw e1;
+console.log('login ok');
+const p = async (fn, args) => { const { data, error } = await c1.rpc(fn, args); if (error) console.log('ERR', fn, error.message); return data; };
+console.log('eh_usuario_legado:', await p('eh_usuario_legado', { _user_id: u1.id }));
+const { data: vinc0 } = await c1.from('empresa_usuarios').select('empresa_id').eq('user_id', u1.id).eq('ativo', true);
+console.log('vinculos iniciais:', vinc0);
+const empId = await p('criar_empresa_onboarding', { _nome: `Empresa Teste ${stamp}`, _cnpj: null, _email: u1.email, _telefone: null, _observacoes: 'teste fase 12' });
+console.log('empresa criada:', empId);
+const { data: vinc1 } = await c1.from('empresa_usuarios').select('empresa_id,papel,ativo').eq('user_id', u1.id);
+console.log('vinculo:', vinc1);
+console.log('assinatura_ativa (esperado false):', await p('assinatura_ativa_empresa', { _empresa_id: empId, _ambiente: 'sandbox' }), await p('assinatura_ativa_empresa', { _empresa_id: empId, _ambiente: 'live' }));
+console.log('plano (esperado null):', await p('plano_da_empresa', { _empresa_id: empId, _ambiente: 'sandbox' }));
+const { data: outras } = await c1.from('empresas').select('id,nome');
+console.log('empresas visiveis para novo usuario:', outras);
+const { data: perfil } = await c1.from('user_profiles').select('perfil').eq('user_id', u1.id).maybeSingle();
+console.log('perfil:', perfil);
+console.log(JSON.stringify({ empId, u1, sessToken: sess.session.access_token.slice(0,8)+'…' }));
+await admin.from('empresas').select('id').eq('id', empId);
+import('fs').then(m=>m.writeFileSync('/tmp/f12/state.json', JSON.stringify({ empId, u1 })));
