@@ -328,20 +328,23 @@ function Login() {
 
           </Tabs>
 
-          <Button
-            variant="outline"
-            className="w-full"
-            size="lg"
-            onClick={async () => {
-              const { error } = await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: { redirectTo: `${window.location.origin}${destino}` },
-              });
-              if (error) toast.error("Não foi possível entrar com o Google");
-            }}
-          >
-            Entrar com Google
-          </Button>
+          {/* Login com Google: ative o provedor no Supabase e defina VITE_LOGIN_GOOGLE="true". */}
+          {import.meta.env.VITE_LOGIN_GOOGLE === "true" && (
+            <Button
+              variant="outline"
+              className="w-full"
+              size="lg"
+              onClick={async () => {
+                const { error } = await supabase.auth.signInWithOAuth({
+                  provider: "google",
+                  options: { redirectTo: `${window.location.origin}${destino}` },
+                });
+                if (error) toast.error("Não foi possível entrar com o Google");
+              }}
+            >
+              Entrar com Google
+            </Button>
+          )}
             </>
           )}
         </CardContent>
