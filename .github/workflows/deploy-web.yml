@@ -55,10 +55,14 @@ jobs:
           TOKEN=$(printf '%s' "$TOKEN_BRUTO" | tr -d '[:space:]')
           CONTA=$(printf '%s' "$CONTA_BRUTA" | grep -oiE '[0-9a-f]{32}' | head -1)
           if [ -z "$TOKEN" ]; then echo "::error::Segredo CLOUDFLARE_API_TOKEN vazio ou ausente."; exit 1; fi
-          if [ -z "$CONTA" ]; then echo "::error::CLOUDFLARE_ACCOUNT_ID não contém um Account ID válido (32 caracteres hexadecimais)."; exit 1; fi
           echo "::add-mask::$TOKEN"
           echo "CLOUDFLARE_API_TOKEN=$TOKEN" >> "$GITHUB_ENV"
-          echo "CLOUDFLARE_ACCOUNT_ID=$CONTA" >> "$GITHUB_ENV"
+          if [ -n "$CONTA" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID=$CONTA" >> "$GITHUB_ENV"
+          else
+            # Sem um Account ID válido, o wrangler descobre a conta a partir do token.
+            echo "::warning::CLOUDFLARE_ACCOUNT_ID ausente ou inválido; usando a conta do token."
+          fi
 
       - name: Publicar
         run: npx --yes wrangler@4 deploy --config dist/server/wrangler.json
