@@ -36,7 +36,7 @@
     var destino = params.get("url") || "";
     var APP_URL = /^https:\/\/(([a-z0-9-]+\.)*conferenciarapida\.com\.br|conferenciamat\.lovable\.app)\//.test(destino)
       ? destino
-      : "https://conferenciamat.lovable.app/";
+      : "https://conferenciarapida.com.br/";
     if (params.get("erro")) document.getElementById("detalhe").textContent = "Detalhe: " + params.get("erro");
     function tentar() { window.location.replace(APP_URL); }
     document.getElementById("tentar").addEventListener("click", tentar);
