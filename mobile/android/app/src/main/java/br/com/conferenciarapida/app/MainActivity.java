@@ -67,8 +67,11 @@ public class MainActivity extends BridgeActivity {
     private static final String TAG = "ConferenciaRapida";
     private static final String CANAL = "CRNativo";
 
-    /** Endereço do sistema publicado, carregado diretamente pelo WebView (rede nativa do Chromium). */
-    static final String APP_URL = "https://conferenciarapida.com.br/";
+    /**
+     * Endereço do sistema publicado, carregado diretamente pelo WebView (rede nativa do Chromium).
+     * Usa o endereço publicado pela Lovable, que não depende do DNS do domínio próprio.
+     */
+    static final String APP_URL = "https://conferenciamat.lovable.app/";
 
     /** Origens do sistema autorizadas a usar o canal nativo. */
     private static final Set<String> ORIGENS = new HashSet<>(
@@ -326,7 +329,7 @@ public class MainActivity extends BridgeActivity {
             }
         );
         webViewImpressao = wv; // mantém a referência até a impressão começar
-        wv.loadDataWithBaseURL("https://conferenciarapida.com.br/", html, "text/html", "UTF-8", null);
+        wv.loadDataWithBaseURL(APP_URL, html, "text/html", "UTF-8", null);
     }
 
     private void imprimirWebView(WebView wv, String titulo) {

@@ -4,9 +4,10 @@ Casca nativa (Capacitor 8) que instala o Conferência Rápida como aplicativo An
 
 ## Como funciona
 
-O app abre o sistema publicado em `https://conferenciarapida.com.br` diretamente no WebView
+O app abre o sistema publicado em `https://conferenciamat.lovable.app` diretamente no WebView
 nativo (`APP_URL` em `MainActivity.java`), usando a rede do próprio Chromium — sem o proxy
-interno do Capacitor, que não é compatível com a hospedagem do sistema. Assim toda a lógica, telas, autenticação
+interno do Capacitor, que não é compatível com a hospedagem do sistema. O endereço da Lovable
+foi escolhido porque não depende do DNS do domínio próprio (`conferenciarapida.com.br`). Assim toda a lógica, telas, autenticação
 (Supabase), funções de servidor (pagamentos, e-mails, WhatsApp, gestão de usuários) e o
 banco de dados continuam exatamente os mesmos da versão web — e cada publicação feita na
 Lovable chega ao app sem precisar gerar um novo APK.
