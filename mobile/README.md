@@ -4,8 +4,9 @@ Casca nativa (Capacitor 8) que instala o Conferência Rápida como aplicativo An
 
 ## Como funciona
 
-O app abre o sistema publicado em `https://conferenciarapida.com.br` dentro de um WebView
-nativo (`server.url` em `capacitor.config.json`). Assim toda a lógica, telas, autenticação
+O app abre o sistema publicado em `https://conferenciarapida.com.br` diretamente no WebView
+nativo (`APP_URL` em `MainActivity.java`), usando a rede do próprio Chromium — sem o proxy
+interno do Capacitor, que não é compatível com a hospedagem do sistema. Assim toda a lógica, telas, autenticação
 (Supabase), funções de servidor (pagamentos, e-mails, WhatsApp, gestão de usuários) e o
 banco de dados continuam exatamente os mesmos da versão web — e cada publicação feita na
 Lovable chega ao app sem precisar gerar um novo APK.
@@ -21,7 +22,7 @@ As adaptações para o Android ficam em:
   - botão **voltar** navega no histórico do app.
 - `android/app/src/main/assets/cr-android.js`: script injetado apenas nas origens do sistema,
   que liga o site a essas funções nativas (canal `CRNativo`).
-- `www/offline.html`: tela exibida quando não há conexão no primeiro acesso.
+- `www/offline.html`: tela exibida só quando a página não carrega por falha de rede (mostra o código do erro).
 
 A sessão (Supabase/localStorage), o IndexedDB do modo offline e o Service Worker ficam
 guardados no armazenamento do app e persistem entre aberturas.
@@ -50,7 +51,8 @@ cd mobile
 npm ci
 npx cap sync android
 cd android && ./gradlew assembleRelease
-# APK: android/app/build/outputs/apk/release/conferencia-rapida-1.0.0-release.apk
+# APK: android/app/build/outputs/apk/release/conferencia-rapida-<versão>-release.apk
 ```
 
-Para trocar o endereço do sistema, altere `server.url` (e `ORIGENS` em `MainActivity.java`).
+Para trocar o endereço do sistema, altere `APP_URL` e `ORIGENS` em `MainActivity.java`
+(e `allowNavigation` em `capacitor.config.json`).

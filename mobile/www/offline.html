@@ -19,6 +19,7 @@
     button { margin-top: 12px; border: 0; border-radius: 10px; padding: 12px 24px; font-size: 16px;
       font-weight: 600; background: var(--primary); color: #fff; min-width: 200px; }
     button:active { opacity: .85; }
+    small { color: var(--muted); font-size: 12px; opacity: .8; word-break: break-word; max-width: 340px; }
   </style>
 </head>
 <body>
@@ -28,13 +29,18 @@
     <p>Não foi possível abrir o Conferência Rápida. Verifique sua internet e tente novamente.</p>
     <p>Depois do primeiro acesso, as telas já visitadas e os dados baixados ficam disponíveis offline.</p>
     <button id="tentar" type="button">Tentar novamente</button>
+    <small id="detalhe"></small>
   </main>
   <script>
-    var APP_URL = "https://conferenciarapida.com.br/";
-    document.getElementById("tentar").addEventListener("click", function () {
-      window.location.replace(APP_URL);
-    });
-    window.addEventListener("online", function () { window.location.replace(APP_URL); });
+    var params = new URLSearchParams(window.location.search);
+    var destino = params.get("url") || "";
+    var APP_URL = /^https:\/\/([a-z0-9-]+\.)*conferenciarapida\.com\.br\//.test(destino)
+      ? destino
+      : "https://conferenciarapida.com.br/";
+    if (params.get("erro")) document.getElementById("detalhe").textContent = "Detalhe: " + params.get("erro");
+    function tentar() { window.location.replace(APP_URL); }
+    document.getElementById("tentar").addEventListener("click", tentar);
+    window.addEventListener("online", tentar);
   </script>
 </body>
 </html>

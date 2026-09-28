@@ -25,6 +25,7 @@ import android.webkit.MimeTypeMap;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -39,6 +40,7 @@ import androidx.webkit.WebViewFeature;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
+import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.WebViewListener;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -65,6 +67,9 @@ public class MainActivity extends BridgeActivity {
     private static final String TAG = "ConferenciaRapida";
     private static final String CANAL = "CRNativo";
 
+    /** Endereço do sistema publicado, carregado diretamente pelo WebView (rede nativa do Chromium). */
+    static final String APP_URL = "https://conferenciarapida.com.br/";
+
     /** Origens do sistema autorizadas a usar o canal nativo. */
     private static final Set<String> ORIGENS = new HashSet<>(
         Arrays.asList("https://conferenciarapida.com.br", "https://www.conferenciarapida.com.br", "https://conferenciamat.lovable.app")
@@ -88,9 +93,38 @@ public class MainActivity extends BridgeActivity {
 
         registrarLaunchers();
         configurarCanalNativo(webView);
+        bridge.setWebViewClient(new WebClient(bridge));
         webView.setWebChromeClient(new ChromeClient(bridge));
         webView.setDownloadListener(this::baixarUrl);
         configurarBotaoVoltar(webView);
+
+        webView.loadUrl(APP_URL);
+    }
+
+    // ------------------------------------------------------------------ carregamento e tela offline
+
+    /**
+     * Mostra a tela "sem conexão" apenas quando a página principal não pôde ser carregada por falha de
+     * rede (DNS, conexão, SSL, tempo esgotado). Respostas HTTP de erro são exibidas pelo próprio sistema.
+     */
+    private class WebClient extends BridgeWebViewClient {
+
+        WebClient(Bridge bridge) {
+            super(bridge);
+        }
+
+        @Override
+        public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+            super.onReceivedError(view, request, error);
+            if (!request.isForMainFrame() || !origemDoSistema(request.getUrl().toString())) return;
+            Log.w(TAG, "Falha ao abrir " + request.getUrl() + ": " + error.getErrorCode() + " " + error.getDescription());
+            Uri offline = Uri.parse(bridge.getLocalUrl() + "/offline.html")
+                .buildUpon()
+                .appendQueryParameter("url", request.getUrl().toString())
+                .appendQueryParameter("erro", error.getErrorCode() + " " + error.getDescription())
+                .build();
+            view.loadUrl(offline.toString());
+        }
     }
 
     // ------------------------------------------------------------------ canal JS <-> Android

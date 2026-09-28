@@ -4,8 +4,6 @@
   "webDir": "www",
   "backgroundColor": "#fdfcfb",
   "server": {
-    "url": "https://conferenciarapida.com.br",
-    "errorPath": "offline.html",
     "cleartext": false,
     "allowNavigation": [
       "conferenciarapida.com.br",
