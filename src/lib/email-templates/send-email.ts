@@ -1,18 +1,13 @@
 import * as React from 'react'
 import { render } from '@react-email/render'
-import { EmailAPIError, sendLovableEmail } from '@lovable.dev/email-js'
 import { TEMPLATES } from './registry'
 
-// Server-only: reads LOVABLE_API_KEY. Never import from client components.
+// Server-only: reads BREVO_API_KEY. Never import from client components.
 
-// Configuration baked in at scaffold time
-const SITE_NAME = "conferenciamat"
-// SENDER_DOMAIN is the verified sender subdomain FQDN (e.g., "notify.example.com").
-// It MUST match the subdomain delegated to Lovable's nameservers. NEVER use the root domain.
-const SENDER_DOMAIN = "notify.conferenciarapida.com.br"
-// FROM_DOMAIN is the domain shown in the From: header (e.g., "example.com").
-// Can be the root domain when display_from_root is enabled — this is cosmetic only.
-const FROM_DOMAIN = "notify.conferenciarapida.com.br"
+const SITE_NAME = process.env['EMAIL_FROM_NAME'] || 'Conferência Rápida'
+// Domínio remetente autenticado no Brevo (registros DKIM/SPF no DNS).
+const FROM_DOMAIN = process.env['EMAIL_FROM_DOMAIN'] || 'notify.conferenciarapida.com.br'
+const BREVO_URL = 'https://api.brevo.com/v3/smtp/email'
 
 export type SendTemplateEmailResult =
   | { sent: true }
@@ -25,21 +20,31 @@ export interface SendTemplateEmailOptions {
   replyTo?: string
 }
 
+/** Erro da API do Brevo, com o código e o status HTTP para diagnóstico. */
+export class EmailAPIError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public status: number,
+  ) {
+    super(message)
+    this.name = 'EmailAPIError'
+  }
+}
+
 /**
- * Renders a registered template and sends it through Lovable's managed email
- * API. Suppression, retries, and rate limits are enforced by Lovable
- * server-side. A suppressed recipient is an expected outcome
- * ({ sent: false }); any other failure throws — EmailAPIError exposes
- * .code and .status for branching.
+ * Renders a registered template and sends it through Brevo's transactional
+ * email API. A blocked/unsubscribed recipient is an expected outcome
+ * ({ sent: false }); any other failure throws EmailAPIError.
  */
 export async function sendTemplateEmail(
   templateName: string,
   to: string,
   options: SendTemplateEmailOptions = {}
 ): Promise<SendTemplateEmailResult> {
-  const apiKey = process.env['LOVABLE_API_KEY']
+  const apiKey = process.env['BREVO_API_KEY']
   if (!apiKey) {
-    throw new Error('LOVABLE_API_KEY is not configured')
+    throw new Error('BREVO_API_KEY is not configured')
   }
 
   const template = TEMPLATES[templateName]
@@ -65,27 +70,33 @@ export async function sendTemplateEmail(
       ? template.subject(templateData)
       : template.subject
 
-  try {
-    await sendLovableEmail(
-      {
-        to: recipient,
-        from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
-        sender_domain: SENDER_DOMAIN,
-        subject,
-        html,
-        text,
-        purpose: 'transactional',
-        label: templateName,
-        idempotency_key: options.idempotencyKey || crypto.randomUUID(),
-        reply_to: options.replyTo,
-      },
-      { apiKey, sendUrl: process.env['LOVABLE_SEND_URL'] }
-    )
-  } catch (error) {
-    if (error instanceof EmailAPIError && error.code === 'recipient_suppressed') {
+  const resposta = await fetch(BREVO_URL, {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: SITE_NAME, email: `nao-responda@${FROM_DOMAIN}` },
+      to: [{ email: recipient }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+      replyTo: options.replyTo ? { email: options.replyTo } : undefined,
+      tags: [templateName],
+      headers: { 'X-Idempotency-Key': options.idempotencyKey || crypto.randomUUID() },
+    }),
+  })
+
+  if (!resposta.ok) {
+    const corpo = (await resposta.json().catch(() => ({}))) as { code?: string; message?: string }
+    const code = corpo.code ?? 'brevo_error'
+    const mensagem = corpo.message ?? `Brevo respondeu ${resposta.status}`
+    if (/blacklist|blocked|unsubscribed/i.test(mensagem)) {
       return { sent: false, reason: 'recipient_suppressed' }
     }
-    throw error
+    throw new EmailAPIError(mensagem, code, resposta.status)
   }
 
   return { sent: true }

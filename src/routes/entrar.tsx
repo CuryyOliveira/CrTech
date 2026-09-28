@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { limparContextoUsuario, registrarAuditoria } from "@/lib/audit";
 import { registrarTentativaLogin } from "@/lib/audit.functions";
 import { abrirSessaoOffline, cofreExiste, encerrarSessaoOffline, salvarCofre, validarCofre } from "@/lib/offline/cofre";
@@ -334,10 +333,11 @@ function Login() {
             className="w-full"
             size="lg"
             onClick={async () => {
-              const result = await lovable.auth.signInWithOAuth("google", {
-                redirect_uri: `${window.location.origin}${destino}`,
+              const { error } = await supabase.auth.signInWithOAuth({
+                provider: "google",
+                options: { redirectTo: `${window.location.origin}${destino}` },
               });
-              if (result.error) toast.error("Não foi possível entrar com o Google");
+              if (error) toast.error("Não foi possível entrar com o Google");
             }}
           >
             Entrar com Google

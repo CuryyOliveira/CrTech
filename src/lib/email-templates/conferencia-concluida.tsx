@@ -150,7 +150,7 @@ export const template = {
     faltantes: '2',
     sobras: '1',
     percentual: '97,5%',
-    urlRelatorio: 'https://conferenciamat.lovable.app/admin/notificacoes',
+    urlRelatorio: 'https://conferenciarapida.com.br/admin/notificacoes',
   },
 } satisfies TemplateEntry
 

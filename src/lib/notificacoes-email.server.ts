@@ -50,7 +50,7 @@ export async function diagnosticarEnvio() {
   const sb = await admin();
   const cfg = await config(sb);
   const etapas = etapasEnvio(cfg);
-  const apiKey = !!process.env["LOVABLE_API_KEY"];
+  const apiKey = !!process.env["BREVO_API_KEY"];
   return {
     etapas,
     apiKey,
@@ -81,7 +81,7 @@ function dadosDoTemplate(
   };
 }
 
-const PAINEL_URL = "https://conferenciamat.lovable.app/admin/notificacoes";
+const PAINEL_URL = `${process.env["APP_URL"] || "https://conferenciarapida.com.br"}/admin/notificacoes`;
 const num = (x?: number | null) => (x == null ? "" : String(x));
 
 /** Escolhe o modelo de e-mail e monta seus dados conforme o tipo do evento. */
@@ -206,7 +206,7 @@ export async function enviarNotificacao(
   if (!destinatarios.length)
     return concluir("nao_configurado", "Nenhum destinatário cadastrado em Notificações");
 
-  const apiKey = process.env["LOVABLE_API_KEY"];
+  const apiKey = process.env["BREVO_API_KEY"];
   const { dominio, remetente } = remetenteDe(cfg);
   if (!apiKey || !dominio || !remetente) {
     const erro =
@@ -266,7 +266,7 @@ export async function reenviarFalhas(): Promise<{ total: number; enviadas: numbe
 export async function enviarTeste(destino?: string | null): Promise<Resultado> {
   const sb = await admin();
   const cfg = await config(sb);
-  const apiKey = process.env["LOVABLE_API_KEY"];
+  const apiKey = process.env["BREVO_API_KEY"];
   const { dominio, remetente } = remetenteDe(cfg);
   const destinatarios = destino?.trim()
     ? [destino.trim()]

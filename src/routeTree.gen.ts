@@ -16,14 +16,11 @@ import { Route as ControleDeEstoqueRouteImport } from './routes/controle-de-esto
 import { Route as ControleDeFerramentasRouteImport } from './routes/controle-de-ferramentas'
 import { Route as EntrarRouteImport } from './routes/entrar'
 import { Route as InventarioDeEstoqueRouteImport } from './routes/inventario-de-estoque'
-import { Route as McpRouteImport } from './routes/mcp'
 import { Route as PrecosRouteImport } from './routes/precos'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as ReembolsoRouteImport } from './routes/reembolso'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermosRouteImport } from './routes/termos'
-import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
-import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAssinaturaRouteImport } from './routes/_authenticated/assinatura'
 import { Route as AuthenticatedAssinaturaNecessariaRouteImport } from './routes/_authenticated/assinatura-necessaria'
@@ -40,8 +37,6 @@ import { Route as AuthenticatedFrotaRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedMasterRouteImport } from './routes/_authenticated/master'
 import { Route as AuthenticatedMenuRouteImport } from './routes/_authenticated/menu'
 import { Route as AuthenticatedPlanosRouteImport } from './routes/_authenticated/planos'
-import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
-import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminSecaoRouteImport } from './routes/_authenticated/admin.$secao'
 import { Route as AuthenticatedMModuloRouteImport } from './routes/_authenticated/m.$modulo'
@@ -51,7 +46,6 @@ import { Route as AuthenticatedMasterEmpresasRouteImport } from './routes/_authe
 import { Route as AuthenticatedUnidadeIdRouteImport } from './routes/_authenticated/unidade.$id'
 import { Route as ApiPublicHooksMonitorConferenciasRouteImport } from './routes/api/public/hooks/monitor-conferencias'
 import { Route as ApiPublicPaymentsMercadopagoRouteImport } from './routes/api/public/payments/mercadopago'
-import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -87,11 +81,6 @@ const InventarioDeEstoqueRoute = InventarioDeEstoqueRouteImport.update({
   path: '/inventario-de-estoque',
   getParentRoute: () => rootRouteImport,
 } as any)
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PrecosRoute = PrecosRouteImport.update({
   id: '/precos',
   path: '/precos',
@@ -117,18 +106,6 @@ const TermosRoute = TermosRouteImport.update({
   path: '/termos',
   getParentRoute: () => rootRouteImport,
 } as any)
-const Char91DotmcpChar93ListToolsRoute =
-  Char91DotmcpChar93ListToolsRouteImport.update({
-    id: '/.mcp/list-tools',
-    path: '/.mcp/list-tools',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const Char91DotwellKnownChar93OauthProtectedResourceRoute =
-  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -217,17 +194,6 @@ const AuthenticatedPlanosRoute = AuthenticatedPlanosRouteImport.update({
   path: '/planos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
-  id: '/.lovable/oauth/consent',
-  path: '/.lovable/oauth/consent',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const Char91DotmcpChar93InvokeToolToolRoute =
-  Char91DotmcpChar93InvokeToolToolRouteImport.update({
-    id: '/.mcp/invoke-tool/$tool',
-    path: '/.mcp/invoke-tool/$tool',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -278,12 +244,6 @@ const ApiPublicPaymentsMercadopagoRoute =
     path: '/api/public/payments/mercadopago',
     getParentRoute: () => rootRouteImport,
   } as any)
-const LovableEmailTransactionalPreviewRoute =
-  LovableEmailTransactionalPreviewRouteImport.update({
-    id: '/lovable/email/transactional/preview',
-    path: '/lovable/email/transactional/preview',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -292,14 +252,11 @@ export interface FileRoutesByFullPath {
   '/controle-de-ferramentas': typeof ControleDeFerramentasRoute
   '/entrar': typeof EntrarRoute
   '/inventario-de-estoque': typeof InventarioDeEstoqueRoute
-  '/mcp': typeof McpRoute
   '/precos': typeof PrecosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/reembolso': typeof ReembolsoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/termos': typeof TermosRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/assinatura': typeof AuthenticatedAssinaturaRoute
   '/assinatura-necessaria': typeof AuthenticatedAssinaturaNecessariaRoute
@@ -316,8 +273,6 @@ export interface FileRoutesByFullPath {
   '/master': typeof AuthenticatedMasterRouteWithChildren
   '/menu': typeof AuthenticatedMenuRoute
   '/planos': typeof AuthenticatedPlanosRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/admin/$secao': typeof AuthenticatedAdminSecaoRoute
   '/m/$modulo': typeof AuthenticatedMModuloRoute
   '/master/auditoria': typeof AuthenticatedMasterAuditoriaRoute
@@ -327,7 +282,6 @@ export interface FileRoutesByFullPath {
   '/master/': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
-  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -336,14 +290,11 @@ export interface FileRoutesByTo {
   '/controle-de-ferramentas': typeof ControleDeFerramentasRoute
   '/entrar': typeof EntrarRoute
   '/inventario-de-estoque': typeof InventarioDeEstoqueRoute
-  '/mcp': typeof McpRoute
   '/precos': typeof PrecosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/reembolso': typeof ReembolsoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/termos': typeof TermosRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/assinatura': typeof AuthenticatedAssinaturaRoute
   '/assinatura-necessaria': typeof AuthenticatedAssinaturaNecessariaRoute
   '/bem-vindo': typeof AuthenticatedBemVindoRoute
@@ -358,8 +309,6 @@ export interface FileRoutesByTo {
   '/frota': typeof AuthenticatedFrotaRoute
   '/menu': typeof AuthenticatedMenuRoute
   '/planos': typeof AuthenticatedPlanosRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/admin/$secao': typeof AuthenticatedAdminSecaoRoute
   '/m/$modulo': typeof AuthenticatedMModuloRoute
   '/master/auditoria': typeof AuthenticatedMasterAuditoriaRoute
@@ -369,7 +318,6 @@ export interface FileRoutesByTo {
   '/master': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
-  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -380,14 +328,11 @@ export interface FileRoutesById {
   '/controle-de-ferramentas': typeof ControleDeFerramentasRoute
   '/entrar': typeof EntrarRoute
   '/inventario-de-estoque': typeof InventarioDeEstoqueRoute
-  '/mcp': typeof McpRoute
   '/precos': typeof PrecosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/reembolso': typeof ReembolsoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/termos': typeof TermosRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/assinatura': typeof AuthenticatedAssinaturaRoute
   '/_authenticated/assinatura-necessaria': typeof AuthenticatedAssinaturaNecessariaRoute
@@ -404,8 +349,6 @@ export interface FileRoutesById {
   '/_authenticated/master': typeof AuthenticatedMasterRouteWithChildren
   '/_authenticated/menu': typeof AuthenticatedMenuRoute
   '/_authenticated/planos': typeof AuthenticatedPlanosRoute
-  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/_authenticated/admin/$secao': typeof AuthenticatedAdminSecaoRoute
   '/_authenticated/m/$modulo': typeof AuthenticatedMModuloRoute
   '/_authenticated/master/auditoria': typeof AuthenticatedMasterAuditoriaRoute
@@ -415,7 +358,6 @@ export interface FileRoutesById {
   '/_authenticated/master/': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
-  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -426,14 +368,11 @@ export interface FileRouteTypes {
     | '/controle-de-ferramentas'
     | '/entrar'
     | '/inventario-de-estoque'
-    | '/mcp'
     | '/precos'
     | '/privacidade'
     | '/reembolso'
     | '/sitemap.xml'
     | '/termos'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/admin'
     | '/assinatura'
     | '/assinatura-necessaria'
@@ -450,8 +389,6 @@ export interface FileRouteTypes {
     | '/master'
     | '/menu'
     | '/planos'
-    | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/admin/$secao'
     | '/m/$modulo'
     | '/master/auditoria'
@@ -461,7 +398,6 @@ export interface FileRouteTypes {
     | '/master/'
     | '/api/public/hooks/monitor-conferencias'
     | '/api/public/payments/mercadopago'
-    | '/lovable/email/transactional/preview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -470,14 +406,11 @@ export interface FileRouteTypes {
     | '/controle-de-ferramentas'
     | '/entrar'
     | '/inventario-de-estoque'
-    | '/mcp'
     | '/precos'
     | '/privacidade'
     | '/reembolso'
     | '/sitemap.xml'
     | '/termos'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/assinatura'
     | '/assinatura-necessaria'
     | '/bem-vindo'
@@ -492,8 +425,6 @@ export interface FileRouteTypes {
     | '/frota'
     | '/menu'
     | '/planos'
-    | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/admin/$secao'
     | '/m/$modulo'
     | '/master/auditoria'
@@ -503,7 +434,6 @@ export interface FileRouteTypes {
     | '/master'
     | '/api/public/hooks/monitor-conferencias'
     | '/api/public/payments/mercadopago'
-    | '/lovable/email/transactional/preview'
   id:
     | '__root__'
     | '/'
@@ -513,14 +443,11 @@ export interface FileRouteTypes {
     | '/controle-de-ferramentas'
     | '/entrar'
     | '/inventario-de-estoque'
-    | '/mcp'
     | '/precos'
     | '/privacidade'
     | '/reembolso'
     | '/sitemap.xml'
     | '/termos'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/_authenticated/admin'
     | '/_authenticated/assinatura'
     | '/_authenticated/assinatura-necessaria'
@@ -537,8 +464,6 @@ export interface FileRouteTypes {
     | '/_authenticated/master'
     | '/_authenticated/menu'
     | '/_authenticated/planos'
-    | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/_authenticated/admin/$secao'
     | '/_authenticated/m/$modulo'
     | '/_authenticated/master/auditoria'
@@ -548,7 +473,6 @@ export interface FileRouteTypes {
     | '/_authenticated/master/'
     | '/api/public/hooks/monitor-conferencias'
     | '/api/public/payments/mercadopago'
-    | '/lovable/email/transactional/preview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -559,19 +483,13 @@ export interface RootRouteChildren {
   ControleDeFerramentasRoute: typeof ControleDeFerramentasRoute
   EntrarRoute: typeof EntrarRoute
   InventarioDeEstoqueRoute: typeof InventarioDeEstoqueRoute
-  McpRoute: typeof McpRoute
   PrecosRoute: typeof PrecosRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   ReembolsoRoute: typeof ReembolsoRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermosRoute: typeof TermosRoute
-  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
-  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
-  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
-  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiPublicHooksMonitorConferenciasRoute: typeof ApiPublicHooksMonitorConferenciasRoute
   ApiPublicPaymentsMercadopagoRoute: typeof ApiPublicPaymentsMercadopagoRoute
-  LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -625,13 +543,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventarioDeEstoqueRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/precos': {
       id: '/precos'
       path: '/precos'
@@ -665,20 +576,6 @@ declare module '@tanstack/react-router' {
       path: '/termos'
       fullPath: '/termos'
       preLoaderRoute: typeof TermosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.mcp/list-tools': {
-      id: '/.mcp/list-tools'
-      path: '/.mcp/list-tools'
-      fullPath: '/.mcp/list-tools'
-      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -793,20 +690,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlanosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/.lovable/oauth/consent': {
-      id: '/.lovable/oauth/consent'
-      path: '/.lovable/oauth/consent'
-      fullPath: '/.lovable/oauth/consent'
-      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.mcp/invoke-tool/$tool': {
-      id: '/.mcp/invoke-tool/$tool'
-      path: '/.mcp/invoke-tool/$tool'
-      fullPath: '/.mcp/invoke-tool/$tool'
-      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated/admin/': {
       id: '/_authenticated/admin/'
       path: '/'
@@ -868,13 +751,6 @@ declare module '@tanstack/react-router' {
       path: '/api/public/payments/mercadopago'
       fullPath: '/api/public/payments/mercadopago'
       preLoaderRoute: typeof ApiPublicPaymentsMercadopagoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/lovable/email/transactional/preview': {
-      id: '/lovable/email/transactional/preview'
-      path: '/lovable/email/transactional/preview'
-      fullPath: '/lovable/email/transactional/preview'
-      preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -963,21 +839,14 @@ const rootRouteChildren: RootRouteChildren = {
   ControleDeFerramentasRoute: ControleDeFerramentasRoute,
   EntrarRoute: EntrarRoute,
   InventarioDeEstoqueRoute: InventarioDeEstoqueRoute,
-  McpRoute: McpRoute,
   PrecosRoute: PrecosRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   ReembolsoRoute: ReembolsoRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermosRoute: TermosRoute,
-  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
-  Char91DotwellKnownChar93OauthProtectedResourceRoute:
-    Char91DotwellKnownChar93OauthProtectedResourceRoute,
-  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
-  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiPublicHooksMonitorConferenciasRoute:
     ApiPublicHooksMonitorConferenciasRoute,
   ApiPublicPaymentsMercadopagoRoute: ApiPublicPaymentsMercadopagoRoute,
-  LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

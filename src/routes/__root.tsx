@@ -10,7 +10,6 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { StatusConexao } from "@/components/StatusConexao";
 import { registrarServiceWorker } from "@/lib/offline/sw";
@@ -41,9 +40,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -100,8 +96,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Conferência de Materiais — Acesso" },
       { name: "twitter:description", content: "Sistema de conferência de materiais da oficina: frota de caminhões, caixas de ferramentas e contagem de estoque." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/68dd3a4c-5352-4455-9a60-a23295690451/id-preview-4dd976f4--7703321e-ea9c-4510-879b-ac651b96a728.lovable.app-1785466468178.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/68dd3a4c-5352-4455-9a60-a23295690451/id-preview-4dd976f4--7703321e-ea9c-4510-879b-ac651b96a728.lovable.app-1785466468178.png" },
+      { property: "og:image", content: "https://conferenciarapida.com.br/icon-512.png" },
+      { name: "twitter:image", content: "https://conferenciarapida.com.br/icon-512.png" },
     ],
 
     links: [

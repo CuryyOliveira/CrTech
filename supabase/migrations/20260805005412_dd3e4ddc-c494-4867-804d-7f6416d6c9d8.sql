@@ -38,7 +38,7 @@ BEGIN
     '*/5 * * * *',
     format($f$
   select net.http_post(
-    url:='https://project--7703321e-ea9c-4510-879b-ac651b96a728.lovable.app/api/public/hooks/monitor-conferencias',
+    url:='https://conferenciarapida.com.br/api/public/hooks/monitor-conferencias',
     headers:='{"Content-Type": "application/json", "x-hook-secret": "%s"}'::jsonb,
     body:='{}'::jsonb
   ) as request_id;
