@@ -1,0 +1,83 @@
+name: Publicar sistema (Cloudflare Workers)
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "mobile/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_DOMAIN: conferenciarapida.com.br
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Build
+        run: npx vite build
+
+      - name: Configurar Worker (domínio e variáveis públicas)
+        run: |
+          set -a; . ./.env; set +a
+          jq --arg dominio "$APP_DOMAIN" \
+             --arg url "$SUPABASE_URL" \
+             --arg key "$SUPABASE_PUBLISHABLE_KEY" \
+             '.routes = [{pattern: $dominio, custom_domain: true}]
+              | .vars = {SUPABASE_URL: $url, SUPABASE_PUBLISHABLE_KEY: $key, APP_URL: ("https://" + $dominio)}' \
+             dist/server/wrangler.json > dist/server/wrangler.tmp.json
+          mv dist/server/wrangler.tmp.json dist/server/wrangler.json
+          cat dist/server/wrangler.json
+
+      - name: Publicar
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy --config dist/server/wrangler.json
+
+      - name: Segredos do servidor
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          MONITOR_HOOK_SECRET: ${{ secrets.MONITOR_HOOK_SECRET }}
+          MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+          MERCADOPAGO_TEST_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_TEST_ACCESS_TOKEN }}
+          MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
+          MERCADOPAGO_TEST_WEBHOOK_SECRET: ${{ secrets.MERCADOPAGO_TEST_WEBHOOK_SECRET }}
+          MERCADOPAGO_TEST_PAYER_EMAIL: ${{ secrets.MERCADOPAGO_TEST_PAYER_EMAIL }}
+          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_TEMPLATE_INICIO: ${{ secrets.WHATSAPP_TEMPLATE_INICIO }}
+          WHATSAPP_TEMPLATE_CONCLUSAO: ${{ secrets.WHATSAPP_TEMPLATE_CONCLUSAO }}
+          WHATSAPP_TEMPLATE_IDIOMA: ${{ secrets.WHATSAPP_TEMPLATE_IDIOMA }}
+        run: |
+          # Envia ao Worker apenas os segredos cadastrados no GitHub.
+          node -e '
+            const nomes = ["SUPABASE_SERVICE_ROLE_KEY","BREVO_API_KEY","MONITOR_HOOK_SECRET",
+              "MERCADOPAGO_ACCESS_TOKEN","MERCADOPAGO_TEST_ACCESS_TOKEN","MERCADOPAGO_WEBHOOK_SECRET",
+              "MERCADOPAGO_TEST_WEBHOOK_SECRET","MERCADOPAGO_TEST_PAYER_EMAIL","WHATSAPP_ACCESS_TOKEN",
+              "WHATSAPP_PHONE_NUMBER_ID","WHATSAPP_TEMPLATE_INICIO","WHATSAPP_TEMPLATE_CONCLUSAO","WHATSAPP_TEMPLATE_IDIOMA"];
+            const s = Object.fromEntries(nomes.filter((n) => process.env[n]).map((n) => [n, process.env[n]]));
+            console.log("Segredos enviados:", Object.keys(s).join(", ") || "nenhum");
+            require("fs").writeFileSync(process.env.RUNNER_TEMP + "/segredos.json", JSON.stringify(s));
+          '
+          npx --yes wrangler@4 secret bulk "$RUNNER_TEMP/segredos.json" --config dist/server/wrangler.json
+          rm -f "$RUNNER_TEMP/segredos.json"

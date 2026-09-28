@@ -31,12 +31,14 @@ export default defineConfig(({ command, mode }) => {
         client: { files: ["**/server/**"], specifiers: ["server-only"] },
       },
     }),
-    // Servidor Node (Railway): `node dist/server/index.mjs`.
+    // Cloudflare Workers por padrão (deploy com `npx wrangler deploy`); para um servidor Node,
+    // use NITRO_PRESET=node-server e `npm start`.
     ...(command === "build"
       ? [
           nitro({
-            preset: "node-server",
+            preset: process.env.NITRO_PRESET || "cloudflare-module",
             output: { dir: "dist", serverDir: "dist/server", publicDir: "dist/client" },
+            cloudflare: { nodeCompat: true, deployConfig: true },
           }),
         ]
       : []),

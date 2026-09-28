@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "start": "node dist/server/index.mjs"
+    "start": "node dist/server/index.mjs",
+    "deploy": "vite build && npx --yes wrangler@4 deploy --config dist/server/wrangler.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

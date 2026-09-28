@@ -781,3 +781,13 @@ npm run dev
 
 O projeto Android fica em [`mobile/`](mobile/README.md) (Capacitor). O APK é gerado
 automaticamente pelo workflow **APK Android** do GitHub Actions e publicado em *Releases*.
+
+## Publicação (sem Lovable)
+
+- **Sistema web:** Cloudflare Workers, publicado pelo workflow *Publicar sistema (Cloudflare Workers)*
+  (`.github/workflows/deploy-web.yml`) a cada push na `main` ou manualmente em *Actions*.
+  Local: `npm run build` e `npm run deploy` (requer `wrangler login`).
+- **Banco e login:** Supabase `phixzybxehifndmukvte` (migrações em `supabase/migrations`).
+- **E-mails:** Brevo (`BREVO_API_KEY`), remetente `nao-responda@notify.conferenciarapida.com.br`.
+- **Segredos (GitHub → Settings → Secrets → Actions):** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `BREVO_API_KEY` e, se usados, `MERCADOPAGO_*`, `WHATSAPP_*`, `MONITOR_HOOK_SECRET`.
