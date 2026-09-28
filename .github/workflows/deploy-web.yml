@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - "claude/app-to-android-apk-irx1ru"
     paths-ignore:
       - "mobile/**"
       - "**.md"

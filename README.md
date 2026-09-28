@@ -788,6 +788,6 @@ automaticamente pelo workflow **APK Android** do GitHub Actions e publicado em *
   (`.github/workflows/deploy-web.yml`) a cada push na `main` ou manualmente em *Actions*.
   Local: `npm run build` e `npm run deploy` (requer `wrangler login`).
 - **Banco e login:** Supabase `phixzybxehifndmukvte` (migrações em `supabase/migrations`).
-- **E-mails:** Brevo (`BREVO_API_KEY`), remetente `nao-responda@notify.conferenciarapida.com.br`.
+- **E-mails:** Brevo (`BREVO_API_KEY`), remetente `nao-responda@conferenciarapida.com.br`.
 - **Segredos (GitHub → Settings → Secrets → Actions):** `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
   `SUPABASE_SERVICE_ROLE_KEY`, `BREVO_API_KEY` e, se usados, `MERCADOPAGO_*`, `WHATSAPP_*`, `MONITOR_HOOK_SECRET`.
