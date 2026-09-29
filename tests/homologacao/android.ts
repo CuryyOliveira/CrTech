@@ -416,9 +416,23 @@ async function main() {
   // reconecta o teste à página atual antes de continuar.
   const reconectar = async () => {
     if (!page.isClosed()) return;
+    // Procura entre os WebViews já abertos do app (o evento de "novo WebView" pode não vir).
+    for (let i = 0; i < 30; i++) {
+      for (const wv of d
+        .webViews()
+        .filter((w) => w.pkg() === PKG)
+        .reverse()) {
+        const p = await wv.page().catch(() => null);
+        if (p && !p.isClosed()) {
+          page = p;
+          page.on("pageerror", (e) => resultado.errosJs.push(String(e.message ?? e).slice(0, 300)));
+          return;
+        }
+      }
+      await esperar(1000);
+    }
     const wv = await d.webView({ pkg: PKG }, { timeout: 30_000 });
     page = await wv.page();
-    page.on("pageerror", (e) => resultado.errosJs.push(String(e.message ?? e).slice(0, 300)));
   };
 
   await etapa("rotação para paisagem e de volta", async () => {
