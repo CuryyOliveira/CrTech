@@ -82,8 +82,20 @@ jobs:
             exit 1
           fi
           export CHAVE_NOVA_KS="$RUNNER_TEMP/producao.keystore"
-          keytool -list -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" >/dev/null \
-            || { echo "::error::senha do keystore (ANDROID_KEYSTORE_PASSWORD) ou alias (ANDROID_KEY_ALIAS) incorretos"; exit 1; }
+          # Diagnóstico sem expor valores: formato do arquivo, senha e alias separadamente.
+          MAGICO="$(head -c 4 "$CHAVE_NOVA_KS" | od -An -tx1 | tr -d ' \n')"
+          case "$MAGICO" in
+            feedfeed) FORMATO="JKS" ;;
+            30*) FORMATO="PKCS12" ;;
+            *) echo "::error::o conteúdo de ANDROID_KEYSTORE_BASE64 não é um keystore (.jks/.p12): foi decodificado, mas o arquivo não tem o formato esperado ($(wc -c < "$CHAVE_NOVA_KS") bytes). Regere o secret a partir do arquivo da chave."; exit 1 ;;
+          esac
+          echo "Keystore $FORMATO ($(wc -c < "$CHAVE_NOVA_KS") bytes)"
+          if ! SAIDA_KT="$(keytool -list -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD 2>&1)"; then
+            echo "::error::ANDROID_KEYSTORE_PASSWORD incorreta para este keystore $FORMATO (keytool: $(echo "$SAIDA_KT" | grep -i 'error' | head -1))"; exit 1
+          fi
+          if ! keytool -list -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::a senha do keystore está correta, mas o alias em ANDROID_KEY_ALIAS não existe. Aliases no keystore: $(echo "$SAIDA_KT" | grep -iE 'PrivateKeyEntry' | cut -d, -f1 | paste -sd ' ')"; exit 1
+          fi
           D=mobile/android/app/build/outputs/apk/release
           UNS="$(ls "$D"/*.apk)"
           mv "$UNS" "$RUNNER_TEMP/sem-assinatura.apk"
