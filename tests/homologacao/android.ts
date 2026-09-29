@@ -226,10 +226,17 @@ async function main() {
             .catch(() => 0)) > 0
         : false;
     }
+    const textos = [...xml.matchAll(/text="([^"]+)"/g)].map((m) => m[1]).slice(0, 20);
+    const relevantes = log
+      .split("\n")
+      .filter((l) =>
+        /chromium|Console|Capacitor|cr-navegador|ERR_|ConferenciaRapida|WebView/i.test(l),
+      )
+      .slice(-25);
     registrar(
       `WebView antigo (${versaoWebView}): mostra como atualizar em vez de abrir quebrado`,
       aviso,
-      aviso ? undefined : await diagnostico(d, "webview-antigo"),
+      aviso ? undefined : { textos, log: relevantes },
     );
     registrar(
       "fluxos da conferência",
@@ -400,6 +407,11 @@ async function main() {
     caches: "caches" in window ? await caches.keys() : [],
   }));
   registrar("service worker ativo antes de cortar a rede", sw.controlada, sw);
+  // Como no uso real (o app já foi aberto antes com o service worker ativo): a página passa pelo
+  // service worker uma vez e fica guardada para abrir sem internet.
+  await page.reload();
+  await page.getByTestId("item-atual").waitFor({ timeout: 60_000 });
+  await calibrar(d, page);
 
   await etapa("sem internet (Wi-Fi e dados desligados de verdade)", async () => {
     await rede(d, false);
