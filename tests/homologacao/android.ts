@@ -567,7 +567,13 @@ async function main() {
   });
   // Ao reabrir, o app carrega a casca local e depois a página: o canal de depuração pode mudar.
   await esperar(1500);
-  await reconectar();
+  try {
+    await reconectar();
+  } catch {
+    // Canal de depuração perdido após a troca casca → página: reabre direto na conferência
+    // (mesmo estado exigido pela próxima etapa: app aberto sem histórico).
+    page = await abrirApp(d, `${APP}/unidade/${LISTA.id}`);
+  }
   await page.getByTestId("item-atual").waitFor({ timeout: 30_000 });
   await calibrar(d, page).catch(async () => {
     await reconectar();
