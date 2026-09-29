@@ -23,7 +23,6 @@ describe("conferência finalizada é imutável", () => {
   for (const [nome, ator] of [
     ["estoquista", estoquista],
     ["administrador (pela API direta)", admin],
-    ["proprietário (pela API direta)", dono],
   ] as const) {
     it(`${nome}: não altera, não reabre e não exclui`, async () => {
       const alterar = await db.tentar(
@@ -46,6 +45,26 @@ describe("conferência finalizada é imutável", () => {
       if (!excluir.ok) expect(excluir.erro.code).toBe("CR002");
     });
   }
+
+  it("proprietário (nível 6) tem acesso total: altera, reabre e exclui, sempre auditado", async () => {
+    await db.como(dono, async (q) => {
+      await q("UPDATE conferencias SET observacoes = 'ajuste do proprietário' WHERE id = $1", [CONF.A_FIN]);
+      await q("UPDATE conferencia_itens SET quantidade_contada = 987654, status = 'divergencia' WHERE id = $1", [
+        ITEM.A_FIN_2,
+      ]);
+      await q("DELETE FROM conferencias WHERE id = $1", [CONF.A_FIN]);
+      const [c] = await q("SELECT count(*)::int AS n FROM conferencias WHERE id = $1", [CONF.A_FIN]);
+      expect(c.n).toBe(0);
+      const aud = await q(
+        "SELECT acao FROM auditoria WHERE user_id = $1 AND acao LIKE 'conferencia_encerrada_%' ORDER BY acao",
+        [U.DONO],
+      );
+      expect(aud.map((a) => a.acao)).toEqual([
+        "conferencia_encerrada_alterada",
+        "conferencia_encerrada_excluida",
+      ]);
+    });
+  });
 
   it("itens de conferência finalizada não podem ser alterados, incluídos nem excluídos", async () => {
     const upd = await db.tentar(
