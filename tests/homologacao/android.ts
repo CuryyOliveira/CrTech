@@ -616,7 +616,7 @@ async function main() {
       .waitFor({ state: "hidden", timeout: 10_000 })
       .catch(() => undefined);
     await page.getByTestId("item-atual").waitFor({ timeout: 30_000 });
-    await tocar(d, page, 'button:has-text("TIRAR FOTO")');
+    await tocar(d, page, 'label:has-text("TIRAR FOTO")');
     await esperar(3000);
     const f = await foco();
     await tela(d, "10-camera");
