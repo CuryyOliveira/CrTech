@@ -39,15 +39,19 @@ O release é gerado sem assinatura e assinado pelo `apksigner` com as duas chave
 
 Workflow `android-v2-assinatura.yml`, job "Rotação de chave e atualização em emulador". Os APKs de teste usam chaves **temporárias** geradas na hora e descartadas.
 
+Execução de 29/09/2026 (run 36512116295, commit `7571dbd`): **0 falhas nos dois emuladores.**
+
 | Cenário | Android 8 (API 26) | Android 11 (API 30) |
 |---|---|---|
-| Instalar versão atual (chave antiga) | ver CI | ver CI |
-| **Atualizar** para versão com rotação (sem desinstalar, dados preservados) | ver CI | ver CI |
-| Atualizar sobre versão assinada com a mesma chave nova | ver CI | ver CI |
-| APK com outra chave qualquer é recusado | ver CI | ver CI |
-| APK só com a chave antiga (pública) após a rotação | aceito (risco residual) | **recusado** |
-| App abre após as atualizações | ver CI | ver CI |
-| Instalação limpa da versão nova | ver CI | ver CI |
+| Instalar versão atual (chave atual) | ✅ | ✅ |
+| **Atualizar** para versão com rotação (sem desinstalar; `firstInstallTime` mantido = dados preservados) | ✅ | ✅ |
+| Atualizar sobre versão assinada com a mesma chave nova | ✅ | ✅ |
+| APK com outra chave qualquer é recusado | ✅ recusado (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) | ✅ recusado |
+| APK só com a chave antiga (pública) após a rotação | aceito (risco residual esperado) | ✅ **recusado** |
+| App abre após as atualizações | ✅ | ✅ |
+| Instalação limpa da versão nova | ✅ | ✅ |
+
+Também passaram: testes unitários + lint Android (`testDebugUnitTest lintDebug`) e a conferência do APK distribuído.
 
 A verificação (`scripts/android/verificar-apk.sh`) confere package name, versionCode, validade da assinatura, a presença da chave atual e, quando informada, da chave de produção e da cadeia de rotação. Ela **bloqueia** APK que não instalaria por cima do app atual, e o teste do CI comprova esse bloqueio.
 
