@@ -4,6 +4,23 @@
 > Nenhuma correção foi aplicada. As prioridades refletem apenas impacto técnico e risco
 > operacional. Data: 29/09/2026.
 
+## Status após a Fase 0 (branch `v2-development`, ainda NÃO em produção)
+
+| ID | Status na V2 | Onde |
+|---|---|---|
+| S-01 | Preparado: rotação de chave testada em emulador; aguardando a chave de produção do proprietário | `docs/ANDROID_SIGNING.md` |
+| S-02 | Corrigido no banco (trigger + RPCs administrativas auditadas) | migration `20260929120200` |
+| S-03 | Parcial: alterações em conferência encerrada agora geram auditoria no próprio banco; auditoria *append-only* completa fica para a V2.4 | idem |
+| S-04 | Pendente (V2.2) | — |
+| S-05 | Pendente (V2.2) | — |
+| S-06 | Revisado: `has_role` revogada; demais conferidas (validam empresa/usuário internamente e são usadas pela V1) | migration `20260929120100` |
+| S-07 | Pendente: configuração no painel do Supabase (ação do proprietário) | — |
+| S-08 | Corrigido: fonte única = nível do perfil | `docs/AUTHORIZATION_MODEL.md` |
+| S-09 | Parcial: regras críticas no banco (transições, assinatura, duplicidade) + RPCs idempotentes | migrations `…120200`, `…120300` |
+| S-14 | Corrigido: sem senha, resposta uniforme, limite persistente | `src/lib/tentativas-login.server.ts`, migration `…120400` |
+| **S-15 (novo)** | **Corrigido:** administrador podia se promover a super_admin (acesso global) pela API | migration `…120100` |
+| **S-16 (novo)** | **Corrigido:** administradores de uma empresa viam/alteravam dados de outras empresas e dados globais | migration `…120100` |
+
 ## Resumo
 
 | ID | Risco | Prioridade |
@@ -22,6 +39,8 @@
 | S-12 | Resíduos da Lovable (`allowNavigation`, exceções no SW) e scripts `t*.tmp.mjs` versionados | BAIXA |
 | S-13 | Identificação do Master por e-mail fixo no código | BAIXA |
 | S-14 | Server function pública `registrarTentativaLogin` funciona como oráculo de senha, com limite de frequência ineficaz em Workers | ALTA |
+| S-15 | (encontrado na Fase 0) Administrador (nível 4) podia alterar o próprio perfil para `super_admin` pela API direta, obtendo acesso a todas as empresas | CRÍTICA |
+| S-16 | (encontrado na Fase 0) Policies permitiam a administradores de qualquer empresa ler/alterar usuários, auditoria, pausas, e-mails, sessões e pagamentos de outras empresas, e alterar planos, avisos, cadastros, permissões e configurações globais | ALTA |
 
 ---
 

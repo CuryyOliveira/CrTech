@@ -21,6 +21,9 @@
 
 ## Pré-requisito — Fase 0 (antes da V2.1)
 
+> **Status (29/09/2026): implementada na `v2-development`, aguardando revisão. Nada aplicado em produção.**
+> Relatório: [`FASE0_RELATORIO.md`](./FASE0_RELATORIO.md).
+
 | Item | Prioridade | Motivo |
 |---|---|---|
 | Keystore de release fora do repositório; build de release falha sem ela (S-01) | CRÍTICA | APK pode ser substituído por versão maliciosa |

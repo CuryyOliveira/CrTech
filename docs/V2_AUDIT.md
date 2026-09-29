@@ -15,7 +15,7 @@
 | Branch da V2 | `v2-development` (criada a partir de `35df1d5`). **Não dispara nenhum workflow** de deploy nem de APK |
 | Versão do sistema | Não há versão semântica: `package.json` não tem campo `version`. Identificação real = hash do commit |
 | Versão do APK | `versionName 1.0.3`; `versionCode` vem de `CR_VERSION_CODE` (número da execução do GitHub Actions) |
-| Versão do banco | Projeto Supabase novo. Em `supabase_migrations` constam **5 registros** (migrations consolidadas em lotes na migração da Lovable) enquanto o repositório tem **70 arquivos** em `supabase/migrations/`. Ver §9.4 (drift) |
+| Versão do banco | Projeto Supabase novo. Em `supabase_migrations` constam **5 registros** (migrations consolidadas em lotes na migração da Lovable) enquanto o repositório tem **70 arquivos** em `supabase/migrations/` (68 da Lovable + 2 da migração). Ver §8.5 (drift) e `DATABASE_BASELINE.md` |
 | Tamanho do código | ~39 mil linhas TS/TSX em `src/` |
 
 ---
@@ -378,7 +378,7 @@ Detalhes em §8. Resumo:
   - 4 tabelas com policies permissivas duplicadas.
 
 ### 8.5 Drift de migrations
-O banco registra 5 migrations consolidadas e o repositório tem 70 arquivos + 2 novas.
+O banco registra 5 migrations consolidadas e o repositório tem 70 arquivos. **Resolvido na Fase 0:** ver `DATABASE_BASELINE.md`.
 - **Risco:** um `supabase db push` aplicaria de novo arquivos antigos.
 - **Para a V2:** gerar uma *baseline* (dump do schema atual) e passar a versionar só a partir dela.
 

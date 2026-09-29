@@ -31,16 +31,29 @@ fi
 
 CERTS="$("$BT/apksigner" verify -v --print-certs "$APK")" || falha "assinatura inválida"
 echo "$CERTS" | grep -E "Verified using|Signer|SHA-256 digest" || true
-DIGESTS="$(echo "$CERTS" | sed -n 's/.*certificate SHA-256 digest: //p' | normal | sort -u)"
+digests() { sed -n 's/.*certificate SHA-256 digest: //p' | normal | sort -u; }
+
+# O que um aparelho Android 7/8 verifica (esquema v2, API 24–27).
+ANTIGOS="$("$BT/apksigner" verify --print-certs --max-sdk-version 27 "$APK" | digests)" \
+  || falha "assinatura inválida para Android 7/8"
+# O que um aparelho Android 9+ verifica (esquema v3, se houver; senão v2).
+NOVOS="$("$BT/apksigner" verify --print-certs --min-sdk-version 28 "$APK" | digests)" \
+  || falha "assinatura inválida para Android 9+"
+LINHAGEM="$("$BT/apksigner" lineage --in "$APK" --print-certs 2>/dev/null | normal || true)"
+echo "Android 7/8 verifica: $ANTIGOS"
+echo "Android 9+  verifica: $NOVOS"
+ANT="$(echo "$SHA256_ANTIGA" | normal)"
 
 if [ "$EXIGIR_ANTIGA" = "true" ]; then
-  echo "$DIGESTS" | grep -qx "$(echo "$SHA256_ANTIGA" | normal)" \
-    || falha "o APK não é assinado pela chave atual nem tem rotação a partir dela: NÃO instalaria por cima do app atual"
+  echo "$ANTIGOS" | grep -qx "$ANT" \
+    || falha "Android 7/8: o APK não é assinado pela chave atual — NÃO instalaria por cima do app atual"
+  echo "$NOVOS" | grep -qx "$ANT" || echo "$LINHAGEM" | grep -q "$ANT" \
+    || falha "Android 9+: o APK não é assinado pela chave atual nem tem rotação a partir dela — NÃO instalaria por cima do app atual"
 fi
 if [ -n "${SHA256_NOVA:-}" ]; then
-  echo "$DIGESTS" | grep -qx "$(echo "$SHA256_NOVA" | normal)" || falha "o APK não contém a chave de produção esperada"
-  LINHAGEM="$("$BT/apksigner" lineage --in "$APK" --print-certs 2>&1 | normal)" || falha "o APK não traz a prova de rotação (lineage)"
-  echo "$LINHAGEM" | grep -q "$(echo "$SHA256_ANTIGA" | normal)" || falha "a rotação não parte da chave atual"
-  echo "$LINHAGEM" | grep -q "$(echo "$SHA256_NOVA" | normal)" || falha "a rotação não chega à chave de produção"
+  NOVA="$(echo "$SHA256_NOVA" | normal)"
+  echo "$NOVOS" | grep -qx "$NOVA" || falha "Android 9+: o APK não é assinado pela chave de produção"
+  echo "$LINHAGEM" | grep -q "$ANT" || falha "a prova de rotação não parte da chave atual"
+  echo "$LINHAGEM" | grep -q "$NOVA" || falha "a prova de rotação não chega à chave de produção"
 fi
 echo "OK: $APK"
