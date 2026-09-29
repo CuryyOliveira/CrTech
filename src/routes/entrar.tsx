@@ -14,6 +14,7 @@ import { limparContextoUsuario, registrarAuditoria } from "@/lib/audit";
 import { registrarTentativaLogin } from "@/lib/audit.functions";
 import { abrirSessaoOffline, cofreExiste, encerrarSessaoOffline, salvarCofre, validarCofre } from "@/lib/offline/cofre";
 import { encerrarSessaoLocal } from "@/hooks/useSessao";
+import { prepararCacheParaUsuario } from "@/lib/offline/dono";
 import { precarregarDadosOffline } from "@/lib/offline/precarregar";
 import { db } from "@/lib/app";
 import { erroDeRede } from "@/lib/offline/estado";
@@ -108,6 +109,7 @@ function Login() {
       );
       return false;
     }
+    await prepararCacheParaUsuario(dados.userId);
     abrirSessaoOffline(dados);
     limparContextoUsuario();
     void registrarAuditoria({
@@ -122,7 +124,7 @@ function Login() {
 
   /**
    * Guarda localmente (criptografado) os dados do usuário para uso offline.
-   * Grava primeiro o essencial (id, e-mail, hash da senha e token) para que o
+   * Grava primeiro o essencial (id, e-mail e hash da senha) para que o
    * acesso offline exista imediatamente, e depois enriquece com perfil, setor e
    * unidades — assim uma falha de consulta nunca deixa o dispositivo sem cofre.
    */
@@ -141,13 +143,8 @@ function Login() {
       validadoEm: new Date().toISOString(),
     };
 
-    try {
-      const { data: sessao } = await supabase.auth.getSession();
-      base.token = sessao.session?.access_token ?? null;
-      base.refreshToken = sessao.session?.refresh_token ?? null;
-    } catch (e) {
-      console.warn("[cofre] Não foi possível ler a sessão para o cofre", e);
-    }
+    // Tokens de acesso NÃO vão para o cofre (a sessão online fica com o cliente do Supabase).
+    await prepararCacheParaUsuario(user.id);
 
     const criado = await salvarCofre(senha, base);
     if (!criado) toast.error("Não foi possível preparar o acesso offline neste dispositivo.");

@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { sessaoOffline } from "@/lib/offline/cofre";
-import { estaOffline } from "@/lib/offline/estado";
+import { encerrarSessaoOffline, sessaoOffline } from "@/lib/offline/cofre";
+import { erroDeRede, estaOffline } from "@/lib/offline/estado";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -23,7 +23,16 @@ export const Route = createFileRoute("/_authenticated")({
       ),
     ]);
     if (error || !data.user) {
-      if (local) return { user: { id: local.userId, email: local.email } as never };
+      // A sessão local (login offline) só vale quando o servidor não pôde ser consultado.
+      // Se o servidor respondeu que a sessão é inválida/expirada/revogada, não há acesso.
+      const semRede =
+        !!error &&
+        (error.message === "offline" ||
+          error.message === "timeout" ||
+          error.name === "AuthRetryableFetchError" ||
+          erroDeRede(error));
+      if (local && semRede) return { user: { id: local.userId, email: local.email } as never };
+      if (local) encerrarSessaoOffline();
       throw redirect({ to: "/entrar" });
     }
     return { user: data.user };

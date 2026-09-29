@@ -12,6 +12,8 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { StatusConexao } from "@/components/StatusConexao";
+import { SyncV2 } from "@/components/sync-v2/IndicadorSync";
+import { SYNC_V2_ATIVO } from "@/lib/sync-v2";
 import { registrarServiceWorker } from "@/lib/offline/sw";
 
 
@@ -179,6 +181,7 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <StatusConexao />
+      {SYNC_V2_ATIVO && <SyncV2 />}
       <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );

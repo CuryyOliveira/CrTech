@@ -604,7 +604,7 @@ BEGIN
     END IF;
     RETURN v_existente.resultado || jsonb_build_object(
       'event_id', v_id, 'duplicado', true, 'status', v_existente.status,
-      'recebido_em', v_existente.received_at_server);
+      'recebido_em', v_existente.received_at_server, 'txid', pg_current_xact_id()::text);
   END IF;
 
   BEGIN
@@ -654,7 +654,9 @@ BEGIN
 
   PERFORM app_private.registrar_evento(v_id, v_conf, v_tipo, nullif(v_disp, ''), v_bruta, v_quando,
                                        v_registro, v_versao, v_status, v_res);
-  RETURN v_res || jsonb_build_object('event_id', v_id, 'duplicado', false, 'status', v_status);
+  -- txid: o aparelho sabe que o efeito já chegou pelo pull quando a marca d'água passar dele.
+  RETURN v_res || jsonb_build_object('event_id', v_id, 'duplicado', false, 'status', v_status,
+                                     'txid', pg_current_xact_id()::text);
 END;
 $$;
 

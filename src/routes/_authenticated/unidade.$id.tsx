@@ -479,7 +479,17 @@ function UnidadeDetalhe() {
   const alternarPausa = useMutation({
     mutationFn: async () => {
       const novo = pausada ? "em_andamento" : "pausada";
-      const { error } = await db.from("conferencias").update({ status: novo }).eq("id", ativa!.id);
+      // A hora da pausa/retomada é a do aparelho (vale offline e na sincronização tardia);
+      // o servidor a usa no cálculo do tempo pausado, com limites de segurança.
+      const hora = agoraLocalISO();
+      const { error } = await db
+        .from("conferencias")
+        .update(
+          novo === "pausada"
+            ? { status: novo, ultima_pausa: hora }
+            : { status: novo, ultima_retomada: hora },
+        )
+        .eq("id", ativa!.id);
       if (error) throw error;
       return novo as "em_andamento" | "pausada";
     },

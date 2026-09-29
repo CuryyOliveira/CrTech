@@ -3,8 +3,9 @@
  *
  * Guarda no dispositivo, de forma criptografada (AES-GCM 256), os dados
  * mínimos do usuário que já autenticou online: identificador, nome, matrícula,
- * perfil, setor, unidades autorizadas e o token da última validação.
- * A senha NUNCA é armazenada: apenas um hash PBKDF2-SHA256 com salt aleatório.
+ * perfil, setor e unidades autorizadas. Tokens de acesso NÃO são guardados aqui
+ * (a sessão online é do cliente do Supabase); a senha NUNCA é armazenada: apenas
+ * um hash PBKDF2-SHA256 com salt aleatório.
  */
 
 const PREFIXO = "cr:cofre:";
@@ -19,10 +20,16 @@ export type DadosCofre = {
   perfil: string | null;
   setor: string | null;
   unidades: string[];
+  /** Sempre null: mantido só por compatibilidade com cofres antigos. */
   token: string | null;
   refreshToken: string | null;
   validadoEm: string;
 };
+
+/** Remove qualquer token (cofres/sessões gravados por versões antigas). */
+function semTokens(d: DadosCofre): DadosCofre {
+  return { ...d, token: null, refreshToken: null };
+}
 
 type Cofre = {
   email: string;
@@ -106,7 +113,7 @@ export async function salvarCofre(senha: string, dados: DadosCofre) {
     const cifra = await crypto.subtle.encrypt(
       { name: "AES-GCM", iv: iv as unknown as BufferSource },
       key,
-      new TextEncoder().encode(JSON.stringify(dados)),
+      new TextEncoder().encode(JSON.stringify(semTokens(dados))),
     );
     const cofre: Cofre = {
       email: dados.email.toLowerCase(),
@@ -117,18 +124,9 @@ export async function salvarCofre(senha: string, dados: DadosCofre) {
       atualizado_em: new Date().toISOString(),
     };
     localStorage.setItem(chave(dados.email), JSON.stringify(cofre));
-    console.info("[cofre] Cofre criado com sucesso (localStorage)", {
-      chave: chave(dados.email),
-      email: cofre.email,
-      hashSalvo: !!cofre.hash,
-      perfil: dados.perfil,
-      setor: dados.setor,
-      unidades: dados.unidades.length,
-      token: !!dados.token,
-    });
     return true;
-  } catch (e) {
-    console.error("[cofre] Falha ao criar o cofre local", e);
+  } catch {
+    console.warn("[cofre] Falha ao criar o cofre local");
     return false;
   }
 }
@@ -145,54 +143,40 @@ export async function validarCofre(email: string, senha: string): Promise<DadosC
     return null;
   }
   const bruto = localStorage.getItem(chave(email));
-  if (!bruto) {
-    console.warn("[cofre] Usuário NÃO encontrado no cofre", { chave: chave(email) });
-    return null;
-  }
-  console.info("[cofre] Usuário encontrado no cofre", { chave: chave(email) });
+  if (!bruto) return null;
   try {
     const cofre = JSON.parse(bruto) as Cofre;
     const salt = deB64(cofre.salt);
-    if (!iguais(await hashSenha(senha, salt), cofre.hash)) {
-      console.warn("[cofre] Hash NÃO validado: senha incorreta para o acesso offline");
-      return null;
-    }
-    console.info("[cofre] Hash validado");
+    if (!iguais(await hashSenha(senha, salt), cofre.hash)) return null;
     const key = await chaveAes(senha, salt);
     const aberto = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: deB64(cofre.iv) as unknown as BufferSource },
       key,
       deB64(cofre.dados) as unknown as BufferSource,
     );
-    const dados = JSON.parse(new TextDecoder().decode(aberto)) as DadosCofre;
-    console.info("[cofre] Login offline autorizado", {
-      perfil: dados.perfil,
-      setor: dados.setor,
-      unidades: dados.unidades?.length ?? 0,
-      validadoEm: dados.validadoEm,
-    });
-    return dados;
-  } catch (e) {
-    console.error("[cofre] Falha ao abrir o cofre local", e);
+    return semTokens(JSON.parse(new TextDecoder().decode(aberto)) as DadosCofre);
+  } catch {
+    console.warn("[cofre] Falha ao abrir o cofre local");
     return null;
   }
 }
-
 
 /** Sessão offline ativa (usuário autenticado pelo cofre local). */
 export function sessaoOffline(): DadosCofre | null {
   if (typeof window === "undefined") return null;
   try {
     const bruto = sessionStorage.getItem(SESSAO) ?? localStorage.getItem(SESSAO);
-    return bruto ? (JSON.parse(bruto) as DadosCofre) : null;
+    return bruto ? semTokens(JSON.parse(bruto) as DadosCofre) : null;
   } catch {
     return null;
   }
 }
 
+/** A sessão offline guarda só identificação/perfil — nenhum token. */
 export function abrirSessaoOffline(dados: DadosCofre) {
-  localStorage.setItem(SESSAO, JSON.stringify(dados));
-  sessionStorage.setItem(SESSAO, JSON.stringify(dados));
+  const limpo = JSON.stringify(semTokens(dados));
+  localStorage.setItem(SESSAO, limpo);
+  sessionStorage.setItem(SESSAO, limpo);
 }
 
 export function encerrarSessaoOffline() {

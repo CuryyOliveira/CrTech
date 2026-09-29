@@ -234,7 +234,8 @@ DECLARE
 BEGIN
   v_limpo := app_private.sync_limpo_ate();
   IF v_limpo IS NOT NULL AND c.txid <= v_limpo THEN
-    RETURN jsonb_build_object('reset', true, 'alteracoes', '[]'::jsonb, 'cursor', public.cursor_sync_inicial(), 'mais', false);
+    RETURN jsonb_build_object('reset', true, 'alteracoes', '[]'::jsonb, 'cursor', public.cursor_sync_inicial(),
+                              'mais', false, 'ate', v_xmin::text);
   END IF;
 
   WITH lote AS MATERIALIZED (
@@ -262,7 +263,9 @@ BEGIN
     'alteracoes', v_alteracoes,
     'cursor', CASE WHEN v_ultimo_txid IS NULL THEN _cursor ELSE v_ultimo_txid::text || ':' || v_ultimo_seq::text END,
     'mais', v_total = v_limite,
-    'reset', false);
+    'reset', false,
+    -- Marca d'água: toda transação com txid < ate já foi entregue (quando mais = false).
+    'ate', v_xmin::text);
 END;
 $$;
 

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   testes:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     services:
       postgres:
         # Mesma versão principal da produção (Postgres 17). Banco DESCARTÁVEL de teste.
@@ -41,9 +41,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Lint dos arquivos da Fase 0
+      - name: Lint dos arquivos da Fase 0 e da V2.2/V2.3
         run: >-
           npx eslint vitest.config.ts tests src/lib/tentativas-login.server.ts src/lib/audit.functions.ts
+          src/lib/sync-v2 src/components/sync-v2 src/lib/offline/dono.ts
 
       - name: Lint do repositório inteiro (informativo — pendências anteriores à V2)
         continue-on-error: true
@@ -65,8 +66,21 @@ jobs:
       - name: Testes unitários
         run: npm run test:unit
 
-      - name: Testes de banco (RLS, isolamento, integridade, idempotência, regressão V1)
+      - name: Testes de banco (RLS, isolamento, integridade, idempotência, regressão V1, eventos, motor de sync)
         run: npm run test:db
+
+      - name: Estresse da sincronização (500 / 1.000 / 5.000 eventos)
+        env:
+          CR_ESTRESSE: "1"
+        run: npx vitest run --project db tests/db/motor-estresse.test.ts
+
+      - name: Resultado do estresse
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: estresse-sync
+          path: tests/resultados/estresse-sync.json
+          if-no-files-found: ignore
 
       - name: Mesmos testes contra o schema ATUAL da produção (esperado falhar nas correções da Fase 0)
         continue-on-error: true

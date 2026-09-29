@@ -3,12 +3,14 @@
  * A fila é aplicada em ordem (FIFO) usando upsert por chave primária,
  * o que preserva a integridade e evita conferências/registros duplicados.
  *
- * Nada é descartado por falha de rede: a operação permanece na fila com o
- * último erro registrado e é reenviada com espera progressiva.
+ * Nada é descartado automaticamente: falha de rede ou de servidor mantém a operação
+ * na fila (com espera progressiva); recusa definitiva por regra do servidor move a
+ * operação, completa, para a lista de conflitos.
  */
 import { supabase } from "@/integrations/supabase/client";
 import {
   chavePrimaria,
+  gravarFila,
   lerFila,
   marcarTentativa,
   podeTentar,
@@ -92,7 +94,7 @@ function alvoDaOperacao(op: Operacao): string | null {
  * gestor no navegador). Nesses casos o servidor é preservado e o conflito fica
  * registrado para consulta na Central Administrativa.
  *
- * Retorna true quando a operação deve ser descartada.
+ * Retorna true quando a operação foi movida para a lista de conflitos (preservada, não aplicada).
  */
 async function servidorMaisRecente(op: Operacao, jaAplicadas: Set<string>): Promise<boolean> {
   const coluna = COLUNA_VERSAO[op.tabela];
@@ -121,7 +123,8 @@ async function servidorMaisRecente(op: Operacao, jaAplicadas: Set<string>): Prom
     alterado_servidor_em: String(data[coluna]),
     decisao: "servidor_preservado",
     detalhe:
-      "A informação já havia sido alterada no servidor depois da edição feita offline. A versão do servidor foi mantida.",
+      "A informação já havia sido alterada no servidor depois da edição feita offline. A versão do servidor foi mantida; a alteração offline ficou guardada e pode ser reenviada.",
+    operacao: op,
   });
   return true;
 }
@@ -154,6 +157,13 @@ export async function sincronizar(): Promise<ResultadoSync> {
     return { enviadas: 0, falhas: 0 };
   }
 
+  // Isolamento: cada operação só é enviada com a sessão do usuário que a fez.
+  const { data: sessao } = await supabase.auth
+    .getSession()
+    .catch(() => ({ data: { session: null } }));
+  const usuarioAtual = sessao.session?.user.id ?? null;
+  if (!usuarioAtual) return { enviadas: 0, falhas: 0 };
+
   rodando = true;
   definirEstado("sincronizando");
   let enviadas = 0;
@@ -164,6 +174,7 @@ export async function sincronizar(): Promise<ResultadoSync> {
   const jaAplicadas = new Set<string>();
   try {
     for (const op of fila) {
+      if (op.usuario_id && op.usuario_id !== usuarioAtual) continue; // de outro usuário: aguarda o dono
       if (!podeTentar(op)) continue;
       try {
         if (await servidorMaisRecente(op, jaAplicadas)) {
@@ -174,10 +185,30 @@ export async function sincronizar(): Promise<ResultadoSync> {
         const erro = await aplicar(op);
         if (erro && !conflitoResolvido(op, erro)) {
           falhas++;
+          if (/^CR0\d\d$/.test(erro.code ?? "")) {
+            // Regra de integridade do servidor (ex.: conferência já encerrada): repetir não
+            // adianta. A operação sai da fila, mas fica PRESERVADA na lista de conflitos.
+            registrarConflito({
+              tabela: op.tabela,
+              tipo: op.tipo,
+              entidade_id: alvoDaOperacao(op),
+              alterado_offline_em: op.criado_em,
+              alterado_servidor_em: null,
+              decisao: "recusado_pelo_servidor",
+              detalhe: erro.message ?? "Operação recusada pelo servidor.",
+              operacao: op,
+            });
+            removerDaFila(op.id);
+            conflitos++;
+            continue;
+          }
           marcarTentativa(op.id, erro.message ?? "Falha ao sincronizar");
+          // Nunca descarta: após várias falhas a operação fica "em atenção" na fila
+          // (continua sendo tentada com espera longa e aparece na Central Administrativa).
           const atual = lerFila().find((o) => o.id === op.id);
-          // Falha permanente de regra/permissão: descarta para não travar a fila.
-          if ((atual?.tentativas ?? 0) >= MAX_TENTATIVAS) removerDaFila(op.id);
+          if (atual && atual.tentativas >= MAX_TENTATIVAS) {
+            gravarFila(lerFila().map((o) => (o.id === op.id ? { ...o, status: "atencao" } : o)));
+          }
           continue;
         }
         const alvo = alvoDaOperacao(op);

@@ -30,7 +30,11 @@ export function evento(
   };
 }
 
-export type Resultado = Record<string, unknown> & { status: string; duplicado?: boolean; erro_codigo?: string };
+export type Resultado = Record<string, unknown> & {
+  status: string;
+  duplicado?: boolean;
+  erro_codigo?: string;
+};
 
 /** Envia um lote como o aparelho faria (uma requisição = uma transação confirmada). */
 export async function enviar(db: Banco, ator: Ator, eventos: Evento[]): Promise<Resultado[]> {
@@ -47,4 +51,5 @@ export async function enviar(db: Banco, ator: Ator, eventos: Evento[]): Promise<
 }
 
 export const minutos = (base: Date, m: number) => new Date(base.getTime() + m * 60_000);
-export const ASSINATURA = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+export const ASSINATURA =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

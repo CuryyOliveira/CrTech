@@ -116,3 +116,17 @@ export function removerLocal(chave: string) {
     }
   });
 }
+
+/** Remove o cache de registros (cr:cache:*) — usado quando outro usuário entra no aparelho. */
+export async function limparCacheLocal() {
+  if (!offlinePronto()) await hidratarOffline();
+  for (const chave of Object.keys(memoria)) {
+    if (chave.startsWith("cr:cache:")) removerLocal(chave);
+  }
+  if (typeof localStorage !== "undefined") {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const chave = localStorage.key(i);
+      if (chave?.startsWith("cr:cache:")) localStorage.removeItem(chave);
+    }
+  }
+}

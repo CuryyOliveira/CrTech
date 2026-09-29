@@ -38,3 +38,4 @@ apk/
 # Banco de teste local
 .pg-teste/
 .pg-teste.senha
+tests/resultados/

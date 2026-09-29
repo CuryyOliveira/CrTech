@@ -296,7 +296,27 @@ class Consulta implements PromiseLike<{ data: unknown; error: unknown }> {
     return { data: querSelect ? removidas : null, error: null, count: removidas.length };
   }
 
+  /**
+   * Gera no aparelho o id das linhas inseridas ANTES de tentar o servidor. Se o servidor
+   * demorar (timeout de 10s) e a gravação seguir pela fila local, a fila reenvia a MESMA
+   * linha (upsert pelo mesmo id) em vez de criar uma segunda.
+   */
+  private prepararIds() {
+    const pk = chavePrimaria(this.tabela);
+    if (pk !== "id") return;
+    for (const e of this.etapas) {
+      if (e.m !== "insert") continue; // upsert pode ter outra chave de conflito: não mexer
+      const comId = (l: unknown) =>
+        l && typeof l === "object" && !(l as Linha).id
+          ? { id: crypto.randomUUID(), ...(l as Linha) }
+          : l;
+      const dados = e.args[0];
+      e.args = [Array.isArray(dados) ? dados.map(comId) : comId(dados), ...e.args.slice(1)];
+    }
+  }
+
   private async executar() {
+    this.prepararIds();
     // Garante que o cache local (IndexedDB) esteja carregado antes de ler/gravar.
     if (!offlinePronto()) await hidratarOffline();
     if (estaOffline()) return this.local();

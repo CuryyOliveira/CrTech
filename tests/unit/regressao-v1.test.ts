@@ -116,7 +116,7 @@ describe("login offline (cofre local)", () => {
 });
 
 describe("fila offline da V1 (comportamento atual documentado)", () => {
-  it("enfileira, deduplica a mesma operação e aplica espera progressiva após falha", async () => {
+  it("enfileira, deduplica só por chave explícita e aplica espera progressiva após falha", async () => {
     const { enfileirar, lerFila, marcarTentativa, podeTentar, gravarFila } =
       await import("@/lib/offline/fila");
     gravarFila([]);
@@ -125,9 +125,10 @@ describe("fila offline da V1 (comportamento atual documentado)", () => {
       tipo: "update" as const,
       payload: { status: "finalizada" },
       filtros: [{ coluna: "id", valor: "c1" }],
+      chave: "finalizar:c1",
     };
     enfileirar(op);
-    enfileirar(op); // duplo clique: uma só operação
+    enfileirar(op); // duplo clique com a mesma chave: uma só operação
     expect(lerFila()).toHaveLength(1);
     const id = lerFila()[0].id;
     marcarTentativa(id, "falhou");
@@ -135,7 +136,7 @@ describe("fila offline da V1 (comportamento atual documentado)", () => {
     expect(lerFila()[0].tentativas).toBe(1);
   });
 
-  it("LIMITAÇÃO CONHECIDA (R-03, corrigir na V2.3): pausar→retomar→pausar offline perde a 2ª pausa", async () => {
+  it("R-03 corrigido: pausar→retomar→pausar offline mantém as três operações", async () => {
     const { enfileirar, lerFila, gravarFila } = await import("@/lib/offline/fila");
     gravarFila([]);
     const alvo = [{ coluna: "id", valor: "c1" }];
@@ -160,6 +161,7 @@ describe("fila offline da V1 (comportamento atual documentado)", () => {
     expect(lerFila().map((o) => (o.payload as { status: string }).status)).toEqual([
       "pausada",
       "em_andamento",
+      "pausada",
     ]);
   });
 });

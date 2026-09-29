@@ -1,10 +1,10 @@
 /**
  * Armazenamento local das operações offline (IndexedDB via ./idb): cache dos registros já
- * sincronizados e fila de alterações pendentes (fila FIFO, sem duplicidade).
+ * sincronizados e fila de alterações pendentes (fila FIFO; nada é descartado automaticamente).
  *
  * Cada operação carrega o escopo (empresa, módulo, usuário) e uma chave de
- * idempotência: dois cliques em "Finalizar conferência" geram uma única
- * operação, e reenvios nunca duplicam registros no servidor.
+ * idempotência opcional (chave explícita). Os ids das linhas são gerados no aparelho,
+ * então reenvios (upsert por chave primária) não duplicam registros no servidor.
  */
 
 import { gravarLocal, lerLocal } from "./idb";
@@ -36,7 +36,8 @@ export type Operacao = {
   chave?: string;
   /** Registro alvo (quando conhecido) — usado no relatório de conflitos. */
   entidade_id?: string | null;
-  status?: "pendente" | "erro";
+  /** "atencao": falhou repetidas vezes; continua na fila (nunca é descartada). */
+  status?: "pendente" | "erro" | "atencao";
   ultimo_erro?: string | null;
   proxima_tentativa?: string | null;
 } & Escopo;
@@ -108,19 +109,14 @@ export function pendencias() {
   return lerFila().length;
 }
 
-/** Assinatura estável da operação (tabela + tipo + alvo + conteúdo). */
-function assinatura(op: Omit<Operacao, "id" | "criado_em" | "tentativas">) {
-  return JSON.stringify([op.tabela, op.tipo, op.filtros, op.payload]);
-}
-
 export function enfileirar(op: Omit<Operacao, "id" | "criado_em" | "tentativas">) {
   const fila = lerFila();
-  const chave = op.chave ?? assinatura(op);
-  // Idempotência: a mesma operação (ex.: duplo clique em finalizar) é única.
-  if (fila.some((o) => (o.chave ?? "") === chave)) return;
+  // Idempotência só por chave EXPLÍCITA (ex.: id da operação de finalizar). Não há mais
+  // deduplicação por conteúdo: duas ações iguais em momentos diferentes (pausar → retomar →
+  // pausar, ou contar 5 → 3 → 5) são operações distintas e nenhuma pode ser descartada.
+  if (op.chave && fila.some((o) => o.chave === op.chave)) return;
   fila.push({
     ...op,
-    chave,
     status: "pendente",
     ultimo_erro: null,
     id: crypto.randomUUID(),
@@ -183,9 +179,11 @@ export type Conflito = {
   /** Momento da última alteração já registrada no servidor. */
   alterado_servidor_em: string | null;
   /** Decisão aplicada: o servidor foi preservado ou o offline prevaleceu. */
-  decisao: "servidor_preservado" | "offline_aplicado";
+  decisao: "servidor_preservado" | "offline_aplicado" | "recusado_pelo_servidor";
   detalhe: string;
   registrado_em: string;
+  /** Operação offline completa, preservada para auditoria/reenvio (nada é descartado em silêncio). */
+  operacao?: Operacao;
 };
 
 export function lerConflitos(): Conflito[] {
@@ -195,7 +193,30 @@ export function lerConflitos(): Conflito[] {
 export function registrarConflito(c: Omit<Conflito, "id" | "registrado_em">) {
   const lista = lerConflitos();
   lista.unshift({ ...c, id: crypto.randomUUID(), registrado_em: agoraLocalISO() });
-  gravar(CONFLITOS, lista.slice(0, 200));
+  // Conflitos com a operação preservada não são cortados pelo limite.
+  const comOperacao = lista.filter((x) => x.operacao);
+  const semOperacao = lista.filter((x) => !x.operacao).slice(0, 200);
+  gravar(CONFLITOS, [...comOperacao, ...semOperacao]);
+}
+
+/** Devolve à fila a operação preservada num conflito (decisão explícita do usuário). */
+export function reenfileirarConflito(id: string) {
+  const c = lerConflitos().find((x) => x.id === id);
+  if (!c?.operacao) return false;
+  const fila = lerFila();
+  fila.push({
+    ...c.operacao,
+    status: "pendente",
+    tentativas: 0,
+    proxima_tentativa: null,
+    ultimo_erro: null,
+  });
+  gravarFila(fila);
+  gravar(
+    CONFLITOS,
+    lerConflitos().filter((x) => x.id !== id),
+  );
+  return true;
 }
 
 export function limparConflitos() {
