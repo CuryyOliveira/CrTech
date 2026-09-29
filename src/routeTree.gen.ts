@@ -44,6 +44,7 @@ import { Route as AuthenticatedMModuloRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedMasterIndexRouteImport } from './routes/_authenticated/master.index'
 import { Route as AuthenticatedMasterAuditoriaRouteImport } from './routes/_authenticated/master.auditoria'
 import { Route as AuthenticatedMasterEmpresasRouteImport } from './routes/_authenticated/master.empresas'
+import { Route as AuthenticatedMasterRestaurarRouteImport } from './routes/_authenticated/master.restaurar'
 import { Route as AuthenticatedUnidadeIdRouteImport } from './routes/_authenticated/unidade.$id'
 import { Route as ApiPublicHooksMonitorConferenciasRouteImport } from './routes/api/public/hooks/monitor-conferencias'
 import { Route as ApiPublicPaymentsMercadopagoRouteImport } from './routes/api/public/payments/mercadopago'
@@ -233,6 +234,12 @@ const AuthenticatedMasterEmpresasRoute =
     path: '/empresas',
     getParentRoute: () => AuthenticatedMasterRoute,
   } as any)
+const AuthenticatedMasterRestaurarRoute =
+  AuthenticatedMasterRestaurarRouteImport.update({
+    id: '/restaurar',
+    path: '/restaurar',
+    getParentRoute: () => AuthenticatedMasterRoute,
+  } as any)
 const AuthenticatedUnidadeIdRoute = AuthenticatedUnidadeIdRouteImport.update({
   id: '/unidade/$id',
   path: '/unidade/$id',
@@ -284,6 +291,7 @@ export interface FileRoutesByFullPath {
   '/m/$modulo': typeof AuthenticatedMModuloRoute
   '/master/auditoria': typeof AuthenticatedMasterAuditoriaRoute
   '/master/empresas': typeof AuthenticatedMasterEmpresasRoute
+  '/master/restaurar': typeof AuthenticatedMasterRestaurarRoute
   '/unidade/$id': typeof AuthenticatedUnidadeIdRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/master/': typeof AuthenticatedMasterIndexRoute
@@ -321,6 +329,7 @@ export interface FileRoutesByTo {
   '/m/$modulo': typeof AuthenticatedMModuloRoute
   '/master/auditoria': typeof AuthenticatedMasterAuditoriaRoute
   '/master/empresas': typeof AuthenticatedMasterEmpresasRoute
+  '/master/restaurar': typeof AuthenticatedMasterRestaurarRoute
   '/unidade/$id': typeof AuthenticatedUnidadeIdRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/master': typeof AuthenticatedMasterIndexRoute
@@ -362,6 +371,7 @@ export interface FileRoutesById {
   '/_authenticated/m/$modulo': typeof AuthenticatedMModuloRoute
   '/_authenticated/master/auditoria': typeof AuthenticatedMasterAuditoriaRoute
   '/_authenticated/master/empresas': typeof AuthenticatedMasterEmpresasRoute
+  '/_authenticated/master/restaurar': typeof AuthenticatedMasterRestaurarRoute
   '/_authenticated/unidade/$id': typeof AuthenticatedUnidadeIdRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/master/': typeof AuthenticatedMasterIndexRoute
@@ -403,6 +413,7 @@ export interface FileRouteTypes {
     | '/m/$modulo'
     | '/master/auditoria'
     | '/master/empresas'
+    | '/master/restaurar'
     | '/unidade/$id'
     | '/admin/'
     | '/master/'
@@ -440,6 +451,7 @@ export interface FileRouteTypes {
     | '/m/$modulo'
     | '/master/auditoria'
     | '/master/empresas'
+    | '/master/restaurar'
     | '/unidade/$id'
     | '/admin'
     | '/master'
@@ -480,6 +492,7 @@ export interface FileRouteTypes {
     | '/_authenticated/m/$modulo'
     | '/_authenticated/master/auditoria'
     | '/_authenticated/master/empresas'
+    | '/_authenticated/master/restaurar'
     | '/_authenticated/unidade/$id'
     | '/_authenticated/admin/'
     | '/_authenticated/master/'
@@ -752,6 +765,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMasterEmpresasRouteImport
       parentRoute: typeof AuthenticatedMasterRoute
     }
+    '/_authenticated/master/restaurar': {
+      id: '/_authenticated/master/restaurar'
+      path: '/restaurar'
+      fullPath: '/master/restaurar'
+      preLoaderRoute: typeof AuthenticatedMasterRestaurarRouteImport
+      parentRoute: typeof AuthenticatedMasterRoute
+    }
     '/_authenticated/unidade/$id': {
       id: '/_authenticated/unidade/$id'
       path: '/unidade/$id'
@@ -792,12 +812,14 @@ const AuthenticatedAdminRouteWithChildren =
 interface AuthenticatedMasterRouteChildren {
   AuthenticatedMasterAuditoriaRoute: typeof AuthenticatedMasterAuditoriaRoute
   AuthenticatedMasterEmpresasRoute: typeof AuthenticatedMasterEmpresasRoute
+  AuthenticatedMasterRestaurarRoute: typeof AuthenticatedMasterRestaurarRoute
   AuthenticatedMasterIndexRoute: typeof AuthenticatedMasterIndexRoute
 }
 
 const AuthenticatedMasterRouteChildren: AuthenticatedMasterRouteChildren = {
   AuthenticatedMasterAuditoriaRoute: AuthenticatedMasterAuditoriaRoute,
   AuthenticatedMasterEmpresasRoute: AuthenticatedMasterEmpresasRoute,
+  AuthenticatedMasterRestaurarRoute: AuthenticatedMasterRestaurarRoute,
   AuthenticatedMasterIndexRoute: AuthenticatedMasterIndexRoute,
 }
 
