@@ -15,13 +15,37 @@ import {
   type Perfil,
 } from "@/lib/permissions";
 
-
 type PerfilRow = {
   perfil: Perfil;
   nome: string | null;
   setor: string | null;
   bloqueado: boolean;
 };
+
+/**
+ * Último perfil carregado com internet, por usuário (só perfil, nome, setor e bloqueio — sem
+ * tokens). Usado sem conexão quando não houve "login offline". O servidor continua validando
+ * tudo o que for sincronizado.
+ */
+const CHAVE_PERFIL = (userId: string) => `cr:perfil:${userId}`;
+
+function guardarPerfil(userId: string, row: PerfilRow) {
+  try {
+    const { perfil, nome, setor, bloqueado } = row;
+    localStorage.setItem(CHAVE_PERFIL(userId), JSON.stringify({ perfil, nome, setor, bloqueado }));
+  } catch {
+    /* armazenamento indisponível: segue sem cache */
+  }
+}
+
+function lerPerfilGuardado(userId: string): PerfilRow | null {
+  try {
+    const bruto = localStorage.getItem(CHAVE_PERFIL(userId));
+    return bruto ? (JSON.parse(bruto) as PerfilRow) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Carrega o perfil de acesso do usuário logado e expõe as regras de permissão. */
 export function usePermissoes() {
@@ -32,7 +56,16 @@ export function usePermissoes() {
       // Offline: o perfil e o setor vêm do cofre local, sem chamada de rede.
       if (estaOffline()) {
         const local = sessaoOffline();
-        if (!local) return null;
+        if (!local) {
+          // Sessão aberta com internet (sem "login offline") e o app reaberto sem conexão:
+          // usa o último perfil carregado deste mesmo usuário neste aparelho.
+          const { data: s } = await supabase.auth
+            .getSession()
+            .catch(() => ({ data: { session: null } }));
+          const guardado = s.session ? lerPerfilGuardado(s.session.user.id) : null;
+          if (guardado) return guardado;
+          throw new Error("Sem internet e sem perfil guardado neste aparelho.");
+        }
         return {
           perfil: (local.perfil ?? "agricola") as Perfil,
           nome: local.nome,
@@ -58,13 +91,16 @@ export function usePermissoes() {
         .select("perfil,nome,setor,bloqueado")
         .eq("user_id", user.id)
         .maybeSingle();
-      if (row) return row as PerfilRow;
+      if (row) {
+        guardarPerfil(user.id, row as PerfilRow);
+        return row as PerfilRow;
+      }
 
       // Primeiro acesso: o setor pertence à empresa e é definido no onboarding.
       const meta = user.user_metadata ?? {};
-      const escolhido = meta['perfil'] === "industria" ? "industria" : "agricola";
-      const setorInicial = (meta['setor'] as string | undefined) ?? null;
-      const nome = (meta['nome'] as string | undefined) ?? user.email?.split("@")[0] ?? null;
+      const escolhido = meta["perfil"] === "industria" ? "industria" : "agricola";
+      const setorInicial = (meta["setor"] as string | undefined) ?? null;
+      const nome = (meta["nome"] as string | undefined) ?? user.email?.split("@")[0] ?? null;
       const { data: criado } = await db
         .from("user_profiles")
         .insert({ user_id: user.id, nome, perfil: escolhido, setor: setorInicial })
@@ -94,4 +130,3 @@ export function usePermissoes() {
     podeTipo: (t?: string | null) => podeAcessarTipo(perfil, t),
   };
 }
-

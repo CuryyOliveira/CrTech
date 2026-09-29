@@ -282,6 +282,31 @@ async function main() {
     return { ok: p === `0 / ${LISTA.itens}`, detalhe: p };
   });
 
+  // Como no uso real: o app já foi aberto antes com o service worker ativo (a página fica
+  // guardada para abrir sem internet) e o usuário chega à conferência navegando pelo próprio app.
+  await etapa("navegação interna: lista → conferência", async () => {
+    await ate(
+      () =>
+        page.evaluate(() => Boolean(navigator.serviceWorker && navigator.serviceWorker.controller)),
+      (v) => v === true,
+      30_000,
+    );
+    await page.reload();
+    await page.getByTestId("item-atual").waitFor({ timeout: 60_000 });
+    // O início (120 itens) precisa chegar ao servidor antes; senão a saída pede confirmação.
+    await ate(
+      () => filaPendente(page, u.conferenteA.id),
+      (n) => n === 0,
+      60_000,
+    );
+    await page.getByRole("button", { name: "Voltar para a lista" }).click();
+    const sair = page.getByRole("dialog").getByRole("button", { name: "SAIR" });
+    if (await sair.isVisible({ timeout: 2_000 }).catch(() => false)) await sair.click();
+    await page.getByText(LISTA.nome).first().click({ timeout: 30_000 });
+    await page.getByTestId("item-atual").waitFor({ timeout: 60_000 });
+    return { ok: true, detalhe: await texto(page, "progresso") };
+  });
+
   await calibrar(d, page);
 
   await etapa("ausência de rolagem lateral (retrato)", async () => {
@@ -425,11 +450,6 @@ async function main() {
     caches: "caches" in window ? await caches.keys() : [],
   }));
   registrar("service worker ativo antes de cortar a rede", sw.controlada, sw);
-  // Como no uso real (o app já foi aberto antes com o service worker ativo): a página passa pelo
-  // service worker uma vez e fica guardada para abrir sem internet.
-  await page.reload();
-  await page.getByTestId("item-atual").waitFor({ timeout: 60_000 });
-  await calibrar(d, page);
 
   await etapa("sem internet (Wi-Fi e dados desligados de verdade)", async () => {
     await rede(d, false);
@@ -580,6 +600,13 @@ async function main() {
 
   await etapa("câmera: TIRAR FOTO abre a câmera/permissão do sistema", async () => {
     const foco = async () => (await sh(d, "dumpsys window")).match(/mCurrentFocus=.*\}/)?.[0] ?? "";
+    // Fecha painéis que tenham ficado abertos (ex.: o de atenção após o conflito).
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await page
+      .getByRole("dialog")
+      .waitFor({ state: "hidden", timeout: 10_000 })
+      .catch(() => undefined);
+    await page.getByTestId("item-atual").waitFor({ timeout: 30_000 });
     await tocar(d, page, 'button:has-text("TIRAR FOTO")');
     await esperar(3000);
     const f = await foco();

@@ -494,3 +494,35 @@ test(`desempenho: lista de 1.000 itens no celular (CPU ${CPU}× mais lenta)`, as
   );
   await ctx.close();
 });
+
+test("app reaberto sem internet: sair da conferência, abrir a lista e voltar (sem login offline)", async ({
+  browser,
+}) => {
+  await sql(
+    "UPDATE conferencias SET status = 'cancelada', hora_fim = now() WHERE unidade_id = $1 AND status IN ('em_andamento','pausada')",
+    [LISTAS.media.id],
+  );
+  const ctx = await celular(browser);
+  let page = await ctx.newPage();
+  await entrar(page, APP_V2, u.conferenteA.email);
+  await iniciarV2(page, LISTAS.media.id);
+  await esperarFilaVazia(page, u.conferenteA.id);
+  await page.reload(); // página guardada pelo service worker
+  await expect(page.getByTestId("item-atual")).toBeVisible({ timeout: 30_000 });
+
+  await ctx.setOffline(true);
+  await page.close();
+  page = await ctx.newPage(); // app reaberto: memória limpa, sem internet
+  await page.goto(`${APP_V2}/unidade/${LISTAS.media.id}`);
+  await expect(page.getByTestId("item-atual")).toBeVisible({ timeout: 60_000 });
+  await contar(page, "3");
+  await page.getByRole("button", { name: "Voltar para a lista" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "SAIR" }).click();
+  // A lista abre sem internet (antes: "Acesso não autorizado").
+  await expect(page.getByText("Acesso não autorizado")).toHaveCount(0);
+  await page.getByText(LISTAS.media.nome).first().click({ timeout: 30_000 });
+  await expect(page.getByTestId("progresso")).toHaveText("1 / 120");
+  await ctx.setOffline(false);
+  await esperarFilaVazia(page, u.conferenteA.id);
+  await ctx.close();
+});
