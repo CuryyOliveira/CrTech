@@ -56,6 +56,14 @@ Verificação depois das migrations:
 - Assinado com a chave de produção, com rotação a partir da chave anterior (verificado no
   workflow por `scripts/android/verificar-apk.sh`); sem endereço local no release.
 
+### 2.0.1 — novo ícone
+
+- Release: https://github.com/CuryyOliveira/CrTech/releases/tag/android-v2.0.1
+- Arquivo: `conferencia-rapida-2.0.1-release.apk` (versionCode 13)
+- SHA-256: `2bdc6f39462d5b7fab9a8c99197adaefc2144fd3e1effd5d0553bf562e7418d0`
+- Ícone novo (Android e site), gerado por `scripts/gerar-icones.py` a partir de
+  `assets/icone/original.jpg`. Mesma chave de produção: atualiza por cima da 2.0.0.
+
 ## Limitações conhecidas
 
 - Android 7/8 continuam verificando a chave anterior (esquema v2); Android 9+ passa a exigir a
