@@ -45,6 +45,7 @@ jobs:
         run: >-
           npx eslint vitest.config.ts tests src/lib/tentativas-login.server.ts src/lib/audit.functions.ts
           src/lib/sync-v2 src/components/sync-v2 src/lib/offline/dono.ts
+          src/lib/conferencia-v2 src/components/conferencia-v2 src/lib/texto.ts playwright.config.ts
 
       - name: Lint do repositório inteiro (informativo — pendências anteriores à V2)
         continue-on-error: true
@@ -82,6 +83,21 @@ jobs:
           path: tests/resultados/estresse-sync.json
           if-no-files-found: ignore
 
+      - name: Conferência V2.1 no navegador (Chromium real, perfis celular e desktop)
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - name: Relatório E2E
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-conferencia-v21
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
       - name: Mesmos testes contra o schema ATUAL da produção (esperado falhar nas correções da Fase 0)
         continue-on-error: true
         env:
@@ -89,4 +105,9 @@ jobs:
         run: npx vitest run --project db --reporter=dot || echo "Falhas acima = comportamentos corrigidos pela Fase 0."
 
       - name: Build web (sem deploy)
+        run: npm run build
+
+      - name: Build web com a conferência V2 ligada (sem deploy)
+        env:
+          VITE_CONFERENCE_V2: "1"
         run: npm run build

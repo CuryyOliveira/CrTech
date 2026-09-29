@@ -391,6 +391,29 @@ END;
 $$;
 
 -- Aplica UM evento (SECURITY INVOKER: RLS e regras de integridade da Fase 0 valem).
+-- Totais do Histórico Operacional calculados no servidor ao encerrar (V2.1): a tela nova não
+-- grava mais esses números pelo aparelho. Status e tempos já são mantidos por sync_historico_status.
+CREATE OR REPLACE FUNCTION app_private.atualizar_totais_historico(_conferencia_id uuid)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  UPDATE public.historico_conferencias h
+     SET quantidade_prevista = t.total,
+         quantidade_conferida = t.conferidos,
+         divergencias = t.divergencias,
+         percentual = CASE WHEN t.total > 0 THEN round(t.conferidos * 100.0 / t.total) ELSE 0 END,
+         updated_at = now()
+    FROM (SELECT count(*) AS total,
+                 count(*) FILTER (WHERE status = 'conferido') AS conferidos,
+                 count(*) FILTER (WHERE status = 'divergencia') AS divergencias
+            FROM public.conferencia_itens WHERE conferencia_id = _conferencia_id) t
+   WHERE h.conferencia_id = _conferencia_id
+$$;
+REVOKE ALL ON FUNCTION app_private.atualizar_totais_historico(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION app_private.atualizar_totais_historico(uuid) TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION app_private.aplicar_evento(
   _tipo text, _conferencia_id uuid, _payload jsonb, _quando timestamptz, _dispositivo text, _event_id uuid)
 RETURNS jsonb
@@ -458,6 +481,11 @@ BEGIN
     r := public.adicionar_item_conferencia(
       nullif(_payload->>'item_id', '')::uuid, _conferencia_id,
       _payload || jsonb_build_object('ocorrido_em', v_quando), _event_id);
+    -- Material fora do cadastro: guarda a localização informada pelo conferente (V2.1).
+    IF length(btrim(coalesce(_payload->>'locacao', ''))) > 0 THEN
+      UPDATE public.conferencia_itens SET locacao = left(btrim(_payload->>'locacao'), 200)
+       WHERE id = (r->>'item_id')::uuid AND locacao IS NULL;
+    END IF;
     RETURN jsonb_build_object('status', 'aplicado', 'item_id', r->>'item_id',
                               'status_item', r->>'status', 'repetida', coalesce((r->>'repetida')::boolean, false));
 
@@ -512,6 +540,7 @@ BEGIN
         'assinatura_gestor', coalesce(nullif(_payload->>'assinatura_gestor', ''), c.assinatura_gestor),
         'hora_fim', v_quando, 'ocorrido_em', v_quando),
       _event_id);
+    PERFORM app_private.atualizar_totais_historico(_conferencia_id);
     RETURN jsonb_build_object('status', 'aplicado', 'tempo_trabalhado', r->'tempo_trabalhado');
 
   WHEN 'CONFERENCE_CANCELLED' THEN
@@ -528,6 +557,7 @@ BEGIN
     UPDATE public.conferencias
        SET status = 'cancelada', hora_fim = v_quando, motivo_cancelamento = btrim(_payload->>'motivo')
      WHERE id = c.id RETURNING * INTO c;
+    PERFORM app_private.atualizar_totais_historico(_conferencia_id);
     RETURN jsonb_build_object('status', 'aplicado', 'hora_fim', c.hora_fim);
 
   WHEN 'PHOTO_ADDED' THEN

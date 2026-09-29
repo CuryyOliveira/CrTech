@@ -7,6 +7,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import { MotorSync, type Resumo } from "./motor";
+import { novoId } from "./ids";
 import { TransporteSupabase } from "./transporte";
 
 export { MotorSync } from "./motor";
@@ -23,7 +24,7 @@ export function idDoAparelho() {
   try {
     let id = localStorage.getItem(CHAVE_APARELHO);
     if (!id) {
-      id = crypto.randomUUID();
+      id = novoId();
       localStorage.setItem(CHAVE_APARELHO, id);
     }
     return id;

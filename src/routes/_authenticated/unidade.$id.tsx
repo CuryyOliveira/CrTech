@@ -72,6 +72,8 @@ import {
 } from "@/lib/notificacoes-inicio";
 import { fmtDuracao } from "@/lib/notificacoes-conferencia";
 import { tempoEmPausa, tempoTrabalhado } from "@/lib/gerencial";
+import { CONFERENCIA_V2_ATIVA } from "@/lib/conferencia-v2/flag";
+import { UnidadeV2, type ModoV2 } from "@/components/conferencia-v2/UnidadeV2";
 
 export const Route = createFileRoute("/_authenticated/unidade/$id")({
   head: () => ({
@@ -88,10 +90,16 @@ export const Route = createFileRoute("/_authenticated/unidade/$id")({
       },
     ],
   }),
-  component: UnidadeDetalhe,
+  // VITE_CONFERENCE_V2=1: conferência nova (motor V2). Desligada: V1 exatamente como antes.
+  component: CONFERENCIA_V2_ATIVA ? RotaConferenciaV2 : () => <UnidadeDetalhe />,
 });
 
-function UnidadeDetalhe() {
+function RotaConferenciaV2() {
+  const { id } = Route.useParams();
+  return <UnidadeV2 unidadeId={id} renderV1={(modo) => <UnidadeDetalhe modoV2={modo} />} />;
+}
+
+function UnidadeDetalhe({ modoV2 }: { modoV2?: ModoV2 } = {}) {
   const { id } = Route.useParams();
   const qc = useQueryClient();
 
@@ -381,7 +389,12 @@ function UnidadeDetalhe() {
   }
 
   const iniciarConferencia = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<Conferencia | null> => {
+      if (modoV2) {
+        // V2: a conferência nasce no aparelho (evento CONFERENCE_CREATED) e vale offline.
+        await modoV2.iniciar(startForm);
+        return null;
+      }
       if (!materiais.length) throw new Error("Cadastre materiais antes de iniciar");
       // Proteção contra clique duplo: se já existe conferência aberta nesta
       // lista, reaproveita em vez de criar uma duplicada.
@@ -425,10 +438,12 @@ function UnidadeDetalhe() {
       if (e2) throw e2;
       return conf;
     },
-    onSuccess: (conf: Conferencia) => {
+    onSuccess: (conf: Conferencia | null) => {
       qc.invalidateQueries({ queryKey: ["conferencias", id] });
       setIniciar(false);
       setStartForm({});
+      // V2: histórico operacional e avisos são feitos pelo servidor/motor.
+      if (!conf) return;
       abrirHistorico({
         conferenciaId: conf.id,
         unidadeId: id,
@@ -813,6 +828,8 @@ function UnidadeDetalhe() {
   );
 
   if (acessoNegado) return <AcessoNegado />;
+  // V2: conferência aberta no servidor que o aparelho ainda não recebeu — nunca usar a tela V1.
+  if (modoV2 && ativa) return <>{modoV2.aguardando}</>;
 
   return (
     <div className="min-h-screen bg-background pb-24">

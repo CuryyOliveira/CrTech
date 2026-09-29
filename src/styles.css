@@ -143,3 +143,16 @@
     color: var(--color-foreground);
   }
 }
+
+/*
+ * Conferência V2 (uso no campo, sol forte): laranja da marca um pouco mais escuro para o texto
+ * branco dos botões e o texto laranja sobre fundo claro atingirem contraste AA (≥ 4,5:1).
+ * Só vale dentro da tela da conferência; o restante do app não muda.
+ */
+:root .cr-alto-contraste {
+  --primary: oklch(0.52 0.16 45);
+  --ring: oklch(0.52 0.16 45);
+}
+.dark .cr-alto-contraste {
+  --primary: oklch(0.72 0.17 50);
+}

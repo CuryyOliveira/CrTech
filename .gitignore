@@ -39,3 +39,6 @@ apk/
 .pg-teste/
 .pg-teste.senha
 tests/resultados/
+dist-harness/
+test-results/
+playwright-report/

@@ -98,7 +98,23 @@ public class MainActivity extends BridgeActivity {
         webView.setDownloadListener(this::baixarUrl);
         configurarBotaoVoltar(webView);
 
-        webView.loadUrl(APP_URL);
+        webView.loadUrl(urlInicial());
+    }
+
+    /**
+     * Endereço inicial. Só em build de DEBUG (nunca no APK de release) aceita uma URL de teste
+     * local — usada pelos testes automatizados em emulador (adb reverse → http://localhost:PORTA).
+     */
+    private String urlInicial() {
+        boolean debug = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        String teste = getIntent() != null ? getIntent().getStringExtra("cr_url_teste") : null;
+        if (debug && teste != null && teste.startsWith("http://localhost:")) {
+            Log.i(TAG, "Build de debug: abrindo URL de teste " + teste);
+            // Testes automatizados controlam o WebView pelo DevTools (só debug + URL de teste).
+            WebView.setWebContentsDebuggingEnabled(true);
+            return teste;
+        }
+        return APP_URL;
     }
 
     // ------------------------------------------------------------------ carregamento e tela offline

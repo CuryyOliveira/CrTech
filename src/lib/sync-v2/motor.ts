@@ -14,6 +14,7 @@
  *    já foi confirmado.
  */
 import { BancoLocal, apagarBanco, type Transacao } from "./banco-local";
+import { novoId } from "./ids";
 import { LIMITE_LOGS, sanitizar, type RegistroLog } from "./log";
 import {
   aplicarNaConferencia,
@@ -125,7 +126,7 @@ const MENSAGENS_CONFLITO: Record<string, string> = {
 };
 
 function uuid() {
-  return crypto.randomUUID();
+  return novoId();
 }
 
 function maiorTxid(a: string, b: string) {
@@ -138,6 +139,8 @@ function maiorTxid(a: string, b: string) {
 
 export class MotorSync {
   private ouvintes = new Set<(r: Resumo) => void>();
+  private ouvintesDados = new Set<() => void>();
+  private dadosAgendado = false;
   private resumoAtual: Resumo = {
     estado: "ONLINE",
     pendentes: 0,
@@ -226,6 +229,32 @@ export class MotorSync {
     };
   }
 
+  /**
+   * Avisa a tela que dados locais mudaram (ação do usuário, resposta do servidor ou pull).
+   * Os avisos são agrupados: várias mudanças seguidas geram uma única releitura.
+   */
+  aoAlterarDados(fn: () => void) {
+    this.ouvintesDados.add(fn);
+    return () => {
+      this.ouvintesDados.delete(fn);
+    };
+  }
+
+  private notificarDados() {
+    if (this.dadosAgendado) return;
+    this.dadosAgendado = true;
+    void Promise.resolve().then(() => {
+      this.dadosAgendado = false;
+      for (const fn of this.ouvintesDados) {
+        try {
+          fn();
+        } catch {
+          /* ouvinte com erro não derruba o motor */
+        }
+      }
+    });
+  }
+
   private emitir(parcial: Partial<Resumo>) {
     const r = { ...this.resumoAtual, ...parcial };
     r.estado = this.sincronizando
@@ -302,6 +331,10 @@ export class MotorSync {
   unidades() {
     return this.banco.todos<Record<string, unknown>>("unidades");
   }
+  /** Todos os materiais guardados no aparelho (todas as listas que o usuário pode ver). */
+  todosMateriais() {
+    return this.banco.todos<Record<string, unknown>>("materiais");
+  }
   materiais(unidadeId: string) {
     return this.banco.porIndice<Record<string, unknown>>("materiais", "unidade_id", unidadeId);
   }
@@ -328,6 +361,11 @@ export class MotorSync {
     const itens = status
       ? await this.banco.porIndice<ItemFila>("fila", "status", status)
       : await this.banco.todos<ItemFila>("fila");
+    return itens.sort((a, b) => a.seq - b.seq);
+  }
+  /** Fila de uma conferência (inclui confirmados ainda não refletidos e decisões registradas). */
+  async filaDaConferencia(conferenciaId: string) {
+    const itens = await this.banco.porIndice<ItemFila>("fila", "conference_id", conferenciaId);
     return itens.sort((a, b) => a.seq - b.seq);
   }
   /** Itens que precisam de decisão do usuário (painel "Há alterações que precisam de atenção."). */
@@ -404,6 +442,7 @@ export class MotorSync {
     await this.log("info", "evento_local", { event_id: eventId, tipo, conferencia: conferenciaId });
     // Contagem incremental (O(1)); a contagem completa é refeita a cada sincronização.
     this.emitir({ pendentes: this.resumoAtual.pendentes + 1 });
+    this.notificarDados();
     this.agendar();
     return eventId;
   }
@@ -773,6 +812,7 @@ export class MotorSync {
       } satisfies ItemFila);
       await this.log("info", "decisao", { event_id: eventId, decisao });
       await this.atualizarResumo();
+      this.notificarDados();
       this.agendar();
       return null;
     }
@@ -834,6 +874,7 @@ export class MotorSync {
       });
       await this.log("info", "decisao", { event_id: eventId, decisao, novo_evento: novoId });
       await this.atualizarResumo();
+      this.notificarDados();
       this.agendar();
       return novoId;
     }
@@ -864,6 +905,7 @@ export class MotorSync {
     });
     await this.log("aviso", "decisao", { event_id: eventId, decisao, tipo: f.event_type });
     await this.atualizarResumo();
+    this.notificarDados();
     return null;
   }
 
@@ -943,9 +985,20 @@ export class MotorSync {
 
   sincronizar(opcoes: { forcar?: boolean } = {}): Promise<ResultadoSync> {
     if (this.emAndamento) return this.emAndamento;
-    this.emAndamento = this.executarSync(Boolean(opcoes.forcar)).finally(() => {
+    // (sem Promise.finally: WebViews antigos do Android 8)
+    const limpar = () => {
       this.emAndamento = null;
-    });
+    };
+    this.emAndamento = this.executarSync(Boolean(opcoes.forcar)).then(
+      (r) => {
+        limpar();
+        return r;
+      },
+      (e: unknown) => {
+        limpar();
+        throw e;
+      },
+    );
     return this.emAndamento;
   }
 
@@ -1167,6 +1220,7 @@ export class MotorSync {
       return false;
     }
     await this.banco.gravar("fotos", { ...foto, status: "enviando" });
+    this.notificarDados();
     try {
       await this.transporte.enviarFoto(
         foto.caminho,
@@ -1174,6 +1228,7 @@ export class MotorSync {
         foto.mime,
       );
       await this.banco.gravar("fotos", { ...foto, status: "enviada", erro: null });
+      this.notificarDados();
       await this.log("info", "foto_enviada", { foto: foto.id, bytes: foto.bytes });
       return true;
     } catch (e) {
@@ -1184,6 +1239,7 @@ export class MotorSync {
         erro: e instanceof Error ? e.message : String(e),
       });
       await this.registrarFalhaLote([f], e);
+      this.notificarDados();
       if (e instanceof ErroRede) throw e;
       return false;
     }
@@ -1305,6 +1361,7 @@ export class MotorSync {
         }
       }
     });
+    this.notificarDados();
     const contagem = { aplicados: 0, conflitos: 0, rejeitados: 0, repetir: 0, duplicados: 0 };
     for (const r of mapa.values()) {
       if (r.duplicado) contagem.duplicados++;
@@ -1401,11 +1458,26 @@ export class MotorSync {
   }
 
   /** Aplica uma página de alterações e avança o cursor NA MESMA transação. */
+  /**
+   * Aplica uma página do pull em blocos pequenos (cada bloco é uma transação): as ações do
+   * usuário não ficam esperando uma transação enorme terminar. O cursor e a marca d'água só
+   * avançam no último bloco — se o app fechar no meio, a página é reaplicada (upserts são
+   * idempotentes).
+   */
   private async aplicarAlteracoes(
     alteracoes: Alteracao[],
     cursor: string | null,
     ate: string | null,
   ) {
+    const BLOCO = 100;
+    for (let i = 0; i + BLOCO < alteracoes.length; i += BLOCO) {
+      await this.aplicarBloco(alteracoes.slice(i, i + BLOCO), null, null);
+    }
+    const resto = alteracoes.length % BLOCO || (alteracoes.length ? BLOCO : 0);
+    await this.aplicarBloco(alteracoes.slice(alteracoes.length - resto), cursor, ate);
+  }
+
+  private async aplicarBloco(alteracoes: Alteracao[], cursor: string | null, ate: string | null) {
     await this.banco.transacao([...STORES_PULL], "readwrite", async (t) => {
       const confs = new Map<string, Set<string> | null>(); // null = recalcular tudo
       const tocar = (conf: string, k?: string) => {
@@ -1511,6 +1583,7 @@ export class MotorSync {
       for (const [conf, ks] of confs) await this.recalcular(t, conf, ks ?? undefined);
       if (cursor) await t.put("sincronizacao", { chave: "cursor", valor: cursor });
     });
+    this.notificarDados();
   }
 
   // ---------------------------------------------------------------------------------------

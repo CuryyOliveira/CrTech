@@ -174,29 +174,9 @@ export function compressImage(file: File, max = 900): Promise<string> {
   });
 }
 
-export function normalize(s: unknown) {
-  return String(s ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-/** Natural (alphanumeric) comparison: A1 < A2 < A10. */
-export function natCompare(a?: string | null, b?: string | null) {
-  const x = String(a ?? "").trim();
-  const y = String(b ?? "").trim();
-  if (!x) return y ? 1 : 0;
-  if (!y) return -1;
-  return x.localeCompare(y, "pt-BR", { numeric: true, sensitivity: "base" });
-}
-
-/** Sort items by locação (menor para maior), falling back to código. */
-export function ordenarPorLocacao<T extends { locacao?: string | null; codigo?: string | null }>(
-  arr: T[],
-) {
-  return [...arr].sort((a, b) => natCompare(a.locacao, b.locacao) || natCompare(a.codigo, b.codigo));
-}
+// Texto e ordenação ficam num módulo sem dependências (usado também pela conferência V2).
+export { natCompare, normalize, ordenarPorLocacao } from "@/lib/texto";
+import { normalize } from "@/lib/texto";
 
 /** Normalized header key: "QDE.ESPERADA" -> "qde esperada". */
 export function chaveColuna(s: unknown) {
