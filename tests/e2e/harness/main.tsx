@@ -6,6 +6,9 @@
 import "@/styles.css";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { ConferenceStatusBadge } from "@/components/conferencia-v2/ConferenceStatusBadge";
+import { ConferenceSyncBadge } from "@/components/conferencia-v2/ConferenceSyncStatus";
+import { RESUMO_VAZIO } from "@/lib/sync-v2";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { ConferenceScreen } from "@/components/conferencia-v2/ConferenceScreen";
@@ -117,9 +120,38 @@ function App() {
   );
 }
 
+/** Todos os estados visuais lado a lado (claro e escuro), para o axe checar o contraste de
+ * estados que na tela real aparecem só por um instante (ex.: SINCRONIZANDO). */
+function Vitrine() {
+  const estados = ["ONLINE", "OFFLINE", "SYNCING", "ERROR"] as const;
+  const status = ["pendente", "conferido", "divergencia", "erro", "conflito"] as const;
+  const bloco = (
+    <div className="cr-alto-contraste space-y-2 bg-background p-4 text-foreground">
+      {estados.map((estado) => (
+        <ConferenceSyncBadge key={estado} resumo={{ ...RESUMO_VAZIO, estado, pendentes: 3 }} />
+      ))}
+      {status.map((s) => (
+        <ConferenceStatusBadge key={s} status={s} adicionado />
+      ))}
+      {status.map((s) => (
+        <ConferenceStatusBadge key={`c-${s}`} status={s} adicionado compacto />
+      ))}
+    </div>
+  );
+  return (
+    <main>
+      <h1>Vitrine</h1>
+      <section aria-label="claro">{bloco}</section>
+      <section aria-label="escuro" className="dark">
+        {bloco}
+      </section>
+    </main>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    {params.get("vitrine") ? <Vitrine /> : <App />}
     <Toaster position="top-center" />
   </StrictMode>,
 );

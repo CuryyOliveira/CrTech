@@ -81,6 +81,7 @@ jobs:
           npm ci
           npx cap sync android
           cd android && chmod +x gradlew && ./gradlew --no-daemon -q assembleDebug
+          cp app/build/outputs/apk/debug/*.apk "$RUNNER_TEMP/app-debug.apk"
 
       - name: Habilitar KVM
         run: |
@@ -98,7 +99,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: |
             adb reverse tcp:4173 tcp:4173
-            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r "$RUNNER_TEMP/app-debug.apk"
             node tests/e2e/android/webview.mjs android-resultados-${{ matrix.api }}
 
       - name: Resultados

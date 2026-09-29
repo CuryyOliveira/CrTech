@@ -40,7 +40,7 @@ export function IndicadorSync() {
   return (
     <>
       <div
-        className={`fixed right-3 top-3 z-50 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur ${e.classe}`}
+        className={`cr-alto-contraste fixed right-3 top-3 z-50 flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur ${e.classe}`}
         aria-live="polite"
       >
         <Icone className={`size-3.5 ${resumo.estado === "SYNCING" ? "animate-spin" : ""}`} />

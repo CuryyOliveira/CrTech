@@ -225,7 +225,7 @@ export function ConferenceScreen(props: ConferenceScreenProps) {
           </div>
           <Button
             variant={aba === "lista" ? "default" : "secondary"}
-            className="h-11 gap-1.5 px-3 lg:hidden"
+            className="h-11 gap-1.5 px-3 transition-none lg:hidden"
             aria-pressed={aba === "lista"}
             aria-label={
               aba === "lista" ? "Voltar ao item" : `Ver lista de itens (${visiveis.length})`

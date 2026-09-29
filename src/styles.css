@@ -152,7 +152,9 @@
 :root .cr-alto-contraste {
   --primary: oklch(0.52 0.16 45);
   --ring: oklch(0.52 0.16 45);
+  --destructive: oklch(0.5 0.19 27);
 }
 .dark .cr-alto-contraste {
   --primary: oklch(0.72 0.17 50);
+  --destructive: oklch(0.74 0.16 25);
 }
