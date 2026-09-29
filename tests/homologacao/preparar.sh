@@ -35,7 +35,7 @@ app() {
   cd "$RAIZ"
   rm -rf dist
   NITRO_PRESET=node-server VITE_SUPABASE_URL="http://127.0.0.1:54321" \
-    VITE_SUPABASE_PUBLISHABLE_KEY="$HOMOLOG_ANON_KEY" VITE_CONFERENCE_V2="$v" npx vite build >/dev/null
+    VITE_SUPABASE_PUBLISHABLE_KEY="$HOMOLOG_ANON_KEY" VITE_CONFERENCE_V2="$v" VITE_SYNC_V2="$v" npx vite build >/dev/null
   rm -rf "$DIR/app-v$v" && cp -r dist "$DIR/app-v$v"
   node tests/homologacao/corrigir-manifesto.mjs "$DIR/app-v$v"
   cd "$DIR/app-v$v"

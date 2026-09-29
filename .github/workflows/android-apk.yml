@@ -88,6 +88,12 @@ jobs:
             "$BT/aapt2" dump badging "$apk" | grep -E "^(package|sdkVersion|targetSdkVersion|native-code|application-label)" || true
           done
           bash "$GITHUB_WORKSPACE/scripts/android/verificar-apk.sh" release/*.apk "$CR_VERSION_CODE"
+          # O release de produção abre somente https://conferenciarapida.com.br (sem endereço local).
+          if unzip -p release/*.apk 'classes*.dex' | grep -aqE 'http://(localhost|127\.0\.0\.1)'; then
+            echo "::error::O APK de release contém endereço local (localhost/127.0.0.1)"; exit 1
+          fi
+          unzip -p release/*.apk 'classes*.dex' | grep -aq 'https://conferenciarapida.com.br/' \
+            || { echo "::error::O APK de release não aponta para https://conferenciarapida.com.br/"; exit 1; }
           mkdir -p "$GITHUB_WORKSPACE/apk"
           cp debug/*.apk release/*.apk "$GITHUB_WORKSPACE/apk/"
           (cd "$GITHUB_WORKSPACE/apk" && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
@@ -98,13 +104,27 @@ jobs:
           path: apk/
           if-no-files-found: error
 
-      - name: Publicar na página de Releases
+      - name: Publicar a versão FINAL (somente assinada com a chave de produção)
+        if: ${{ vars.ANDROID_ROTACAO_APROVADA == 'true' }}
+        working-directory: apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VN="$(ls *-release.apk | sed -E 's/.*-([0-9.]+)-release\.apk/\1/')"
+          TAG="android-v$VN"
+          NOTAS="Conferência Rápida $VN para Android (versionCode $CR_VERSION_CODE, commit ${GITHUB_SHA::7}). Assinado com a chave de produção, com rotação a partir da chave anterior: instala por cima do app atual sem perder dados. Instale o arquivo *-release.apk."
+          gh release delete "$TAG" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create "$TAG" *-release.apk SHA256SUMS.txt --target "$GITHUB_SHA" --latest \
+            --title "Conferência Rápida $VN – Android" --notes "$NOTAS" --repo "$GITHUB_REPOSITORY"
+
+      - name: Publicar build de teste na página de Releases (pré-release)
+        if: ${{ vars.ANDROID_ROTACAO_APROVADA != 'true' }}
         working-directory: apk
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="android-${GITHUB_REF_NAME//\//-}"
-          NOTAS="APK Android do Conferência Rápida (build ${{ github.run_number }}, commit ${GITHUB_SHA::7}). Instale o arquivo *-release.apk no celular."
+          NOTAS="Build de TESTE do Conferência Rápida (build ${{ github.run_number }}, commit ${GITHUB_SHA::7}), assinado com a chave antiga. Não é a versão final: a versão final sai assinada com a chave de produção (docs/ANDROID_SIGNING.md)."
           # Recria a release para apontar sempre para o commit mais recente.
           gh release delete "$TAG" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh release create "$TAG" *.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \

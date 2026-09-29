@@ -102,17 +102,19 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Endereço inicial. Só em build de DEBUG (nunca no APK de release) aceita uma URL de teste
-     * local — usada pelos testes automatizados em emulador (adb reverse → http://localhost:PORTA).
+     * Endereço inicial. Só em build de DEBUG aceita uma URL de teste local — usada pelos testes
+     * automatizados em emulador (adb reverse → http://127.0.0.1:PORTA). BuildConfig.DEBUG é
+     * constante: no release o bloco nem é compilado (o APK de produção não contém endereço local).
      */
     private String urlInicial() {
-        boolean debug = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
-        String teste = getIntent() != null ? getIntent().getStringExtra("cr_url_teste") : null;
-        if (debug && teste != null && (teste.startsWith("http://127.0.0.1:") || teste.startsWith("http://localhost:"))) {
-            Log.i(TAG, "Build de debug: abrindo URL de teste " + teste);
-            // Testes automatizados controlam o WebView pelo DevTools (só debug + URL de teste).
-            WebView.setWebContentsDebuggingEnabled(true);
-            return teste;
+        if (BuildConfig.DEBUG) {
+            String teste = getIntent() != null ? getIntent().getStringExtra("cr_url_teste") : null;
+            if (teste != null && (teste.startsWith("http://127.0.0.1:") || teste.startsWith("http://localhost:"))) {
+                Log.i(TAG, "Build de debug: abrindo URL de teste " + teste);
+                // Testes automatizados controlam o WebView pelo DevTools (só debug + URL de teste).
+                WebView.setWebContentsDebuggingEnabled(true);
+                return teste;
+            }
         }
         return APP_URL;
     }
