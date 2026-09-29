@@ -537,7 +537,14 @@ async function main() {
     await tela(d, "07-reaberto-offline");
     return { ok: p === `3 / ${LISTA.itens}`, detalhe: p };
   });
-  await calibrar(d, page);
+  // Ao reabrir, o app carrega a casca local e depois a página: o canal de depuração pode mudar.
+  await esperar(1500);
+  await reconectar();
+  await page.getByTestId("item-atual").waitFor({ timeout: 30_000 });
+  await calibrar(d, page).catch(async () => {
+    await reconectar();
+    await calibrar(d, page);
+  });
 
   // Sem histórico (app aberto direto na conferência): "voltar" manda o app para segundo plano
   // (moveTaskToBack). Ao voltar ao app, tudo continua lá.
