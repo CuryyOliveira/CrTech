@@ -410,6 +410,11 @@ AS $$
                  count(*) FILTER (WHERE status = 'divergencia') AS divergencias
             FROM public.conferencia_itens WHERE conferencia_id = _conferencia_id) t
    WHERE h.conferencia_id = _conferencia_id
+     -- Só quem tem acesso à lista (ou o próprio servidor, sem usuário) recalcula os totais.
+     AND (auth.uid() IS NULL OR EXISTS (
+           SELECT 1 FROM public.conferencias c JOIN public.unidades u ON u.id = c.unidade_id
+            WHERE c.id = _conferencia_id
+              AND app_private.acesso_unidade(u.tipo, u.empresa_id, u.modulo_id)))
 $$;
 REVOKE ALL ON FUNCTION app_private.atualizar_totais_historico(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION app_private.atualizar_totais_historico(uuid) TO authenticated, service_role;

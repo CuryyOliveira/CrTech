@@ -107,6 +107,11 @@ jobs:
       - name: Build web (sem deploy)
         run: npm run build
 
+      - name: Service worker do build de produção é JavaScript completo
+        run: |
+          node --check dist/client/sw.js
+          for f in dist/client/workbox-*.js; do node --check "$f"; done
+
       - name: Build web com a conferência V2 ligada (sem deploy)
         env:
           VITE_CONFERENCE_V2: "1"

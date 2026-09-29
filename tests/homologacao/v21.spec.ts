@@ -405,7 +405,11 @@ test("queda real de internet: alterações, pausa, fechar e reabrir, sincronizar
   await ctx.close();
 });
 
-test("desempenho: lista de 1.000 itens no celular (CPU 4× mais lenta)", async ({ browser }) => {
+const CPU = Number(process.env.HOMOLOG_CPU ?? 4);
+
+test(`desempenho: lista de 1.000 itens no celular (CPU ${CPU}× mais lenta)`, async ({
+  browser,
+}) => {
   await sql(
     "UPDATE conferencias SET status = 'cancelada', hora_fim = now() WHERE unidade_id = $1 AND status IN ('em_andamento','pausada')",
     [LISTAS.grande.id],
@@ -413,29 +417,29 @@ test("desempenho: lista de 1.000 itens no celular (CPU 4× mais lenta)", async (
   const ctx = await celular(browser);
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page);
-  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: CPU });
   const tLogin = Date.now();
   await entrar(page, APP_V2, u.conferenteA.email);
-  medidas.login_ms_cpu4x = Date.now() - tLogin;
+  medidas.login_ms_cpu = Date.now() - tLogin;
   const t0 = Date.now();
   await abrirLista(page, LISTAS.grande.id);
-  medidas.abrir_lista_1000_ms_cpu4x = Date.now() - t0;
-  medidas.iniciar_1000_ms_cpu4x = await iniciarV2(page, LISTAS.grande.id);
+  medidas.abrir_lista_1000_ms_cpu = Date.now() - t0;
+  medidas.iniciar_1000_ms_cpu = await iniciarV2(page, LISTAS.grande.id);
   await expect(page.getByTestId("progresso")).toHaveText("0 / 1000");
   const tc = Date.now();
   await contar(page, "3");
   await expect(page.getByTestId("progresso")).toHaveText("1 / 1000");
-  medidas.confirmar_1000_ms_cpu4x = Date.now() - tc;
+  medidas.confirmar_1000_ms_cpu = Date.now() - tc;
   const tb = Date.now();
   const busca = page.getByLabel("Buscar por código, descrição ou localização");
   await busca.fill("H0999");
   await busca.press("Enter");
   await expect(page.getByTestId("codigo-atual")).toHaveText("H0999");
-  medidas.buscar_1000_ms_cpu4x = Date.now() - tb;
+  medidas.buscar_1000_ms_cpu = Date.now() - tb;
   const tl = Date.now();
   await page.getByRole("button", { name: /Ver lista de itens/ }).click();
   await expect(page.getByTestId("lista-itens")).toBeVisible();
-  medidas.abrir_lista_itens_1000_ms_cpu4x = Date.now() - tl;
+  medidas.abrir_lista_itens_1000_ms_cpu = Date.now() - tl;
   // Travamento: maior tarefa longa durante a rolagem da lista
   const maior = await page.evaluate(async () => {
     let pior = 0;
@@ -452,10 +456,11 @@ test("desempenho: lista de 1.000 itens no celular (CPU 4× mais lenta)", async (
     obs.disconnect();
     return Math.round(pior);
   });
-  medidas.maior_travamento_rolagem_ms_cpu4x = maior;
+  medidas.maior_travamento_rolagem_ms_cpu = maior;
   const ts = Date.now();
   await esperarFilaVazia(page, u.conferenteA.id);
-  medidas.sincronizar_1000_ms_cpu4x = Date.now() - ts;
+  medidas.sincronizar_1000_ms_cpu = Date.now() - ts;
+  medidas.cpu_reduzida_x = CPU;
   medidas.heap_mb = await page.evaluate(() =>
     Math.round(
       ((performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ??

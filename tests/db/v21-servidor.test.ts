@@ -103,3 +103,35 @@ it("carga inicial: itens só de conferências abertas ou encerradas há menos de
   await enviar(db, ESTQ_A, [evento("CONFERENCE_CREATED", aberta, { unidade_id: LISTA.A })]);
   expect(await itens()).toContain(aberta);
 });
+
+it("totais do histórico: usuário de outra empresa não recalcula conferência alheia", async () => {
+  const conf = "00000000-0000-4000-8000-0000000003a1"; // Empresa A
+  await db.dono(
+    "UPDATE historico_conferencias SET quantidade_prevista = 999 WHERE conferencia_id = $1",
+    [conf],
+  );
+  await db.como(
+    usuario(U.ESTQ_B),
+    async (q) => {
+      await q("SELECT app_private.atualizar_totais_historico($1)", [conf]);
+    },
+    { gravar: true },
+  );
+  const [h] = await db.dono<{ p: string }>(
+    "SELECT quantidade_prevista::text AS p FROM historico_conferencias WHERE conferencia_id = $1",
+    [conf],
+  );
+  expect(h.p).toBe("999");
+  await db.como(
+    ESTQ_A,
+    async (q) => {
+      await q("SELECT app_private.atualizar_totais_historico($1)", [conf]);
+    },
+    { gravar: true },
+  );
+  const [h2] = await db.dono<{ p: string }>(
+    "SELECT quantidade_prevista::text AS p FROM historico_conferencias WHERE conferencia_id = $1",
+    [conf],
+  );
+  expect(h2.p).not.toBe("999");
+});
