@@ -53,6 +53,24 @@ function Login() {
   const [senha, setSenha] = useState("");
   const [nome, setNome] = useState("");
   const [carregando, setCarregando] = useState(false);
+
+  async function recuperarSenha() {
+    const alvo = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alvo)) {
+      toast.error("Informe seu e-mail no campo acima para receber o link de redefinição");
+      return;
+    }
+    setCarregando(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(alvo, {
+      redirectTo: `${window.location.origin}/redefinir-senha`,
+    });
+    setCarregando(false);
+    if (error) {
+      toast.error("Não foi possível enviar o link agora. Tente novamente em alguns minutos.");
+      return;
+    }
+    toast.success("Se o e-mail estiver cadastrado, você receberá um link para criar uma nova senha.");
+  }
   // Evita que a navegação automática interrompa a gravação do cofre offline.
   const entrando = useRef(false);
   // Login automático desativado: quem já tem sessão vê uma confirmação manual.
@@ -306,6 +324,14 @@ function Login() {
               <Button className="w-full" size="lg" disabled={carregando} onClick={entrar}>
                 Entrar
               </Button>
+              <button
+                type="button"
+                className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
+                disabled={carregando}
+                onClick={recuperarSenha}
+              >
+                Esqueci minha senha
+              </button>
             </TabsContent>
 
             <TabsContent value="criar" className="space-y-3 pt-4">

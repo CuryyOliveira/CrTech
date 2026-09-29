@@ -18,6 +18,7 @@ import { Route as EntrarRouteImport } from './routes/entrar'
 import { Route as InventarioDeEstoqueRouteImport } from './routes/inventario-de-estoque'
 import { Route as PrecosRouteImport } from './routes/precos'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as ReembolsoRouteImport } from './routes/reembolso'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TermosRouteImport } from './routes/termos'
@@ -89,6 +90,11 @@ const PrecosRoute = PrecosRouteImport.update({
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
   id: '/privacidade',
   path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReembolsoRoute = ReembolsoRouteImport.update({
@@ -254,6 +260,7 @@ export interface FileRoutesByFullPath {
   '/inventario-de-estoque': typeof InventarioDeEstoqueRoute
   '/precos': typeof PrecosRoute
   '/privacidade': typeof PrivacidadeRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/reembolso': typeof ReembolsoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/termos': typeof TermosRoute
@@ -292,6 +299,7 @@ export interface FileRoutesByTo {
   '/inventario-de-estoque': typeof InventarioDeEstoqueRoute
   '/precos': typeof PrecosRoute
   '/privacidade': typeof PrivacidadeRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/reembolso': typeof ReembolsoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/termos': typeof TermosRoute
@@ -330,6 +338,7 @@ export interface FileRoutesById {
   '/inventario-de-estoque': typeof InventarioDeEstoqueRoute
   '/precos': typeof PrecosRoute
   '/privacidade': typeof PrivacidadeRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/reembolso': typeof ReembolsoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/termos': typeof TermosRoute
@@ -370,6 +379,7 @@ export interface FileRouteTypes {
     | '/inventario-de-estoque'
     | '/precos'
     | '/privacidade'
+    | '/redefinir-senha'
     | '/reembolso'
     | '/sitemap.xml'
     | '/termos'
@@ -408,6 +418,7 @@ export interface FileRouteTypes {
     | '/inventario-de-estoque'
     | '/precos'
     | '/privacidade'
+    | '/redefinir-senha'
     | '/reembolso'
     | '/sitemap.xml'
     | '/termos'
@@ -445,6 +456,7 @@ export interface FileRouteTypes {
     | '/inventario-de-estoque'
     | '/precos'
     | '/privacidade'
+    | '/redefinir-senha'
     | '/reembolso'
     | '/sitemap.xml'
     | '/termos'
@@ -485,6 +497,7 @@ export interface RootRouteChildren {
   InventarioDeEstoqueRoute: typeof InventarioDeEstoqueRoute
   PrecosRoute: typeof PrecosRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
+  RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   ReembolsoRoute: typeof ReembolsoRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermosRoute: typeof TermosRoute
@@ -555,6 +568,13 @@ declare module '@tanstack/react-router' {
       path: '/privacidade'
       fullPath: '/privacidade'
       preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/redefinir-senha': {
+      id: '/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/redefinir-senha'
+      preLoaderRoute: typeof RedefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reembolso': {
@@ -841,6 +861,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventarioDeEstoqueRoute: InventarioDeEstoqueRoute,
   PrecosRoute: PrecosRoute,
   PrivacidadeRoute: PrivacidadeRoute,
+  RedefinirSenhaRoute: RedefinirSenhaRoute,
   ReembolsoRoute: ReembolsoRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermosRoute: TermosRoute,
