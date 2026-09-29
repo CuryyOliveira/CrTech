@@ -48,12 +48,17 @@ describe("conferência finalizada é imutável", () => {
 
   it("proprietário (nível 6) tem acesso total: altera, reabre e exclui, sempre auditado", async () => {
     await db.como(dono, async (q) => {
-      await q("UPDATE conferencias SET observacoes = 'ajuste do proprietário' WHERE id = $1", [CONF.A_FIN]);
-      await q("UPDATE conferencia_itens SET quantidade_contada = 987654, status = 'divergencia' WHERE id = $1", [
-        ITEM.A_FIN_2,
+      await q("UPDATE conferencias SET observacoes = 'ajuste do proprietário' WHERE id = $1", [
+        CONF.A_FIN,
       ]);
+      await q(
+        "UPDATE conferencia_itens SET quantidade_contada = 987654, status = 'divergencia' WHERE id = $1",
+        [ITEM.A_FIN_2],
+      );
       await q("DELETE FROM conferencias WHERE id = $1", [CONF.A_FIN]);
-      const [c] = await q("SELECT count(*)::int AS n FROM conferencias WHERE id = $1", [CONF.A_FIN]);
+      const [c] = await q("SELECT count(*)::int AS n FROM conferencias WHERE id = $1", [
+        CONF.A_FIN,
+      ]);
       expect(c.n).toBe(0);
       const aud = await q(
         "SELECT acao FROM auditoria WHERE user_id = $1 AND acao LIKE 'conferencia_encerrada_%' ORDER BY acao",
