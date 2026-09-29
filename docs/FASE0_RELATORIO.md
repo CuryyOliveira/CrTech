@@ -115,7 +115,9 @@ Também não foi feito o ajuste do histórico (`supabase migration repair`), des
 - lint dos arquivos novos: sem erros. O repositório tem 3.285 apontamentos de formatação **anteriores** à V2, não alterados;
 - `npm run build`: passou, sem deploy.
 
-**Android (CI):** conferência do APK distribuído ✅. Instalação e atualização em emulador: ver o resultado do workflow `android-v2-assinatura.yml` na execução da `v2-development`.
+**CI no GitHub (Postgres 17, igual à produção):** `v2-ci.yml` ✅ — baseline idêntica, 119 testes, typecheck, lint e build.
+
+**Android (CI):** conferência do APK distribuído ✅; testes unitários e lint Android ✅; emuladores Android 8 e Android 11 ✅ (0 falhas): instalação, **atualização com rotação preservando os dados**, atualização com a mesma chave, recusa de APK com outra chave e, no Android 11, recusa de APK só com a chave antiga após a rotação (`ANDROID_SIGNING.md` §3).
 
 ## 6. Riscos restantes
 
