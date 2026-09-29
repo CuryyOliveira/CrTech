@@ -42,3 +42,4 @@ tests/resultados/
 dist-harness/
 test-results/
 playwright-report/
+.homologacao/

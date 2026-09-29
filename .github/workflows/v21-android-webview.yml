@@ -1,14 +1,14 @@
 name: V2.1 · Conferência no WebView do Android (emuladores, sem publicar)
 
-# Só a branch da V2. Usa um APK de DEBUG gerado na hora (nunca publicado) e um Postgres de TESTE.
+# Só a branch da V2. APK de DEBUG gerado na hora (nunca publicado), app web REAL compilado com
+# VITE_CONFERENCE_V2=1 e Supabase LOCAL (Docker, migrations do repositório). Nada de produção.
 on:
   push:
     branches: [v2-development]
     paths:
-      - "src/components/conferencia-v2/**"
-      - "src/lib/conferencia-v2/**"
-      - "src/lib/sync-v2/**"
-      - "tests/e2e/**"
+      - "src/**"
+      - "supabase/migrations/**"
+      - "tests/homologacao/**"
       - "mobile/**"
       - ".github/workflows/v21-android-webview.yml"
   workflow_dispatch:
@@ -24,10 +24,7 @@ jobs:
   webview:
     name: WebView API ${{ matrix.api }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    # Android 8 de fábrica traz um WebView de 2017 (sem atualização pela Play Store no emulador):
-    # o resultado é registrado, mas não bloqueia.
-    continue-on-error: ${{ matrix.api == 26 }}
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
@@ -38,18 +35,9 @@ jobs:
             target: default
           - api: 34
             target: google_apis
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: supabase_admin
-          POSTGRES_PASSWORD: supabase_admin
-          POSTGRES_DB: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U supabase_admin" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
-      PG_ADMIN_URL: postgresql://supabase_admin:supabase_admin@127.0.0.1:5432/postgres
+      HOMOLOG_DIR: ${{ github.workspace }}/.homologacao
+      SUPABASE_BIN: supabase
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -64,16 +52,20 @@ jobs:
             package-lock.json
             mobile/package-lock.json
       - uses: gradle/actions/setup-gradle@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
 
       - name: Dependências
         run: npm ci
 
-      - name: Servidor de teste + página da conferência
+      - name: Supabase local (migrations do repositório)
         run: |
-          npx vite build --config tests/e2e/vite.harness.config.ts
-          nohup npx vite-node tests/e2e/servidor.ts > servidor.log 2>&1 &
-          for i in $(seq 1 90); do curl -sf http://localhost:4173/ >/dev/null && break; sleep 2; done
-          curl -sf http://localhost:4173/ >/dev/null
+          bash tests/homologacao/preparar.sh supabase
+          bash tests/homologacao/preparar.sh env | sed 's/^export //' >> "$GITHUB_ENV"
+
+      - name: App real (V2.1 ligada) apontando para o Supabase local
+        run: bash tests/homologacao/preparar.sh app 1 3101
 
       - name: APK de debug (URL de teste só em debug)
         working-directory: mobile
@@ -98,9 +90,10 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: |
-            adb reverse tcp:4173 tcp:4173
+            adb reverse tcp:3101 tcp:3101
+            adb reverse tcp:54321 tcp:54321
             adb install -r "$RUNNER_TEMP/app-debug.apk"
-            node tests/e2e/android/webview.mjs android-resultados-${{ matrix.api }}
+            npx vite-node tests/homologacao/android.ts android-resultados-${{ matrix.api }}
 
       - name: Resultados
         if: always()
@@ -109,5 +102,5 @@ jobs:
           name: android-webview-api-${{ matrix.api }}
           path: |
             android-resultados-${{ matrix.api }}
-            servidor.log
+            .homologacao/app-v1.log
           if-no-files-found: ignore

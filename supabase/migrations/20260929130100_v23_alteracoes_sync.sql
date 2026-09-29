@@ -187,7 +187,9 @@ BEGIN
   END IF;
   EXECUTE format(
     CASE _tabela
-      -- Conferências: abertas e as encerradas nos últimos 30 dias; itens/fotos só dessas.
+      -- Conferências: abertas e as encerradas nos últimos 30 dias (só o cabeçalho). Itens e fotos:
+      -- só das abertas e das encerradas nas últimas 24 h — o aparelho não usa itens de conferências
+      -- antigas e eles cresceriam sem limite (o histórico é consultado no servidor).
       WHEN 'conferencias' THEN
         'SELECT array_agg(id ORDER BY id) FROM (SELECT id FROM public.conferencias
           WHERE ($1 IS NULL OR id > $1) AND (status IN (''em_andamento'',''pausada'') OR created_at > now() - interval ''30 days'')
@@ -195,12 +197,12 @@ BEGIN
       WHEN 'conferencia_itens' THEN
         'SELECT array_agg(id ORDER BY id) FROM (SELECT i.id FROM public.conferencia_itens i
           JOIN public.conferencias c ON c.id = i.conferencia_id
-          WHERE ($1 IS NULL OR i.id > $1) AND (c.status IN (''em_andamento'',''pausada'') OR c.created_at > now() - interval ''30 days'')
+          WHERE ($1 IS NULL OR i.id > $1) AND (c.status IN (''em_andamento'',''pausada'') OR coalesce(c.hora_fim, c.created_at) > now() - interval ''1 day'')
           ORDER BY i.id LIMIT $2) s'
       WHEN 'conferencia_fotos' THEN
         'SELECT array_agg(id ORDER BY id) FROM (SELECT f.id FROM public.conferencia_fotos f
           JOIN public.conferencias c ON c.id = f.conferencia_id
-          WHERE ($1 IS NULL OR f.id > $1) AND (c.status IN (''em_andamento'',''pausada'') OR c.created_at > now() - interval ''30 days'')
+          WHERE ($1 IS NULL OR f.id > $1) AND (c.status IN (''em_andamento'',''pausada'') OR coalesce(c.hora_fim, c.created_at) > now() - interval ''1 day'')
           ORDER BY f.id LIMIT $2) s'
       ELSE 'SELECT array_agg(id ORDER BY id) FROM (SELECT id FROM public.%1$I WHERE ($1 IS NULL OR id > $1) ORDER BY id LIMIT $2) s'
     END, _tabela)

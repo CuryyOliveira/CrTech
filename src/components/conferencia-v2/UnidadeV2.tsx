@@ -44,19 +44,26 @@ function useConferenciasDaLista(motor: MotorSync | null, unidadeId: string) {
     confs: ConferenciaLocal[];
     unidade?: Unidade;
     pronto: boolean;
+    carregado: boolean;
   }>({
     confs: [],
     pronto: false,
+    carregado: false,
   });
   useEffect(() => {
     if (!motor) return;
     let vivo = true;
     const ler = async () => {
-      const [confs, unidades] = await Promise.all([motor.conferencias(), motor.unidades()]);
+      const [confs, unidades, carregado] = await Promise.all([
+        motor.conferencias(),
+        motor.unidades(),
+        motor.cargaInicialConcluida(),
+      ]);
       if (!vivo) return;
       setEstado({
         confs: confs.filter((c) => c.unidade_id === unidadeId),
         unidade: unidades.find((u) => u.id === unidadeId) as Unidade | undefined,
+        carregado,
         pronto: true,
       });
     };
@@ -77,8 +84,8 @@ export function UnidadeV2({
   unidadeId: string;
   renderV1: (modo: ModoV2) => ReactNode;
 }) {
-  const { motor } = useMotorSync();
-  const { confs, unidade, pronto } = useConferenciasDaLista(motor, unidadeId);
+  const { motor, resumo } = useMotorSync();
+  const { confs, unidade, pronto, carregado } = useConferenciasDaLista(motor, unidadeId);
   const navigate = useNavigate();
   // A conferência fica na tela até o usuário sair (inclusive depois de finalizar/cancelar,
   // para mostrar "finalizada neste aparelho — aguardando sincronização").
@@ -129,12 +136,18 @@ export function UnidadeV2({
   }
 
   // Lista ainda não baixada para o aparelho: busca antes de permitir iniciar (offline, fica o aviso).
-  if (motor && pronto && !unidade && motor.resumo().estado !== "OFFLINE" && !buscouLista.current) {
+  const online = resumo.estado !== "OFFLINE";
+  if (motor && pronto && !unidade && online && !buscouLista.current) {
     buscouLista.current = true;
     void motor.sincronizar().catch(() => undefined);
   }
 
-  if (!motor || !pronto) {
+  // Primeira carga do aparelho ainda em andamento (listas chegam antes dos materiais): espera
+  // terminar para não oferecer "Iniciar" com a lista pela metade. Sem internet ou com erro de
+  // sincronização, segue com o que há (o motor avisa se faltar a lista).
+  const esperandoCarga =
+    !carregado && !aberta && (resumo.estado === "SYNCING" || resumo.estado === "ONLINE");
+  if (!motor || !pronto || esperandoCarga) {
     return (
       <p className="flex items-center justify-center gap-2 p-8 text-muted-foreground">
         <RefreshCw className="size-4 animate-spin" aria-hidden /> Preparando os dados deste

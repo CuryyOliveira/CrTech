@@ -217,6 +217,11 @@ export class MotorSync {
   // Estado / observadores
   // ---------------------------------------------------------------------------------------
 
+  /** true depois que a carga inicial (todas as listas e materiais) terminou neste aparelho. */
+  async cargaInicialConcluida() {
+    return Boolean(await this.banco.ler<{ valor: string }>("sincronizacao", "cursor"));
+  }
+
   resumo() {
     return this.resumoAtual;
   }
