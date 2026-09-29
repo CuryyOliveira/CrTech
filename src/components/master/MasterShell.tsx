@@ -42,6 +42,7 @@ export function MasterShell({
             { to: "/master", label: "Visão geral" },
             { to: "/master/empresas", label: "Empresas" },
             { to: "/master/auditoria", label: "Auditoria" },
+            { to: "/master/restaurar", label: "Restaurar dados" },
           ].map((i) => (
             <Button key={i.to} variant="ghost" size="sm" asChild>
               <Link

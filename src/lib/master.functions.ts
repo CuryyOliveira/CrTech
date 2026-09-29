@@ -7,6 +7,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import * as restauracao from "@/lib/restauracao-legado";
 
 export type {
   EmpresaResumoMaster,
@@ -193,4 +194,34 @@ export const auditoriaMasterLista = createServerFn({ method: "POST" })
     const { exigirMaster, auditoriaMaster } = await import("@/lib/master.server");
     await exigirMaster(context as any);
     return auditoriaMaster(data.limite);
+  });
+
+/**
+ * Restaura um lote de registros exportados da Lovable Cloud (mantém os IDs originais).
+ * Só o proprietário Master pode chamar; a gravação é feita pela função do banco
+ * `importar_dados_legados`, restrita ao servidor.
+ */
+export const restaurarDadosMaster = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { tabela: string; registros: Record<string, string>[] }) => {
+    const { ORDEM_RESTAURACAO } = restauracao;
+    const tabela = String(data?.tabela ?? "");
+    if (!(ORDEM_RESTAURACAO as readonly string[]).includes(tabela)) {
+      throw new Error("Tabela não permitida na restauração.");
+    }
+    if (!Array.isArray(data?.registros) || data.registros.length > 1000) {
+      throw new Error("Lote inválido.");
+    }
+    return { tabela, registros: data.registros };
+  })
+  .handler(async ({ data, context }) => {
+    const { exigirMaster } = await import("@/lib/master.server");
+    await exigirMaster(context as any);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: gravados, error } = await (supabaseAdmin as any).rpc("importar_dados_legados", {
+      _tabela: data.tabela,
+      _registros: data.registros,
+    });
+    if (error) throw new Error(error.message);
+    return { gravados: Number(gravados ?? 0) };
   });
