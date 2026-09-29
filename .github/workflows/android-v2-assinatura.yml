@@ -1,0 +1,194 @@
+name: V2 · Android — assinatura e instalação (sem publicar)
+
+# Roda SOMENTE na branch de desenvolvimento da V2. NÃO publica APK, NÃO cria Release e
+# NÃO envia arquivos: as chaves de teste são geradas na hora e descartadas com a máquina.
+on:
+  push:
+    branches: [v2-development]
+    paths:
+      - "mobile/**"
+      - "scripts/android/**"
+      - ".github/workflows/android-v2-assinatura.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk-distribuido:
+    name: APK distribuído hoje (somente leitura)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Baixar o APK publicado e conferir pacote, versão e certificado
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/atual"
+          gh release download android-claude-app-to-android-apk-irx1ru --repo "$GITHUB_REPOSITORY" \
+            --pattern '*-release.apk' --dir "$RUNNER_TEMP/atual"
+          APK="$(ls "$RUNNER_TEMP"/atual/*-release.apk)"
+          sha256sum "$APK"
+          bash scripts/android/verificar-apk.sh "$APK"
+          echo "Fingerprint da chave versionada (debug.keystore):"
+          keytool -list -v -keystore mobile/android/app/debug.keystore -storepass android | grep -E "SHA256:|Owner:"
+
+  instalacao:
+    name: Rotação de chave e atualização em emulador (API ${{ matrix.api }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 30]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Preparar projeto Android
+        working-directory: mobile
+        run: |
+          npm ci
+          npx cap sync android
+
+      - name: Testes unitários e lint Android
+        if: matrix.api == 30
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest lintDebug
+
+      - name: Gerar chaves TEMPORÁRIAS de teste (nunca salvas)
+        run: |
+          D="$RUNNER_TEMP/chaves"; mkdir -p "$D"
+          for k in nova outra; do
+            SENHA="$(openssl rand -hex 16)"
+            keytool -genkeypair -keystore "$D/$k.p12" -storetype PKCS12 -alias teste -keyalg RSA -keysize 4096 \
+              -validity 10000 -dname "CN=Teste $k, O=Conferencia Rapida CI" -storepass "$SENHA" -keypass "$SENHA" >/dev/null
+            echo "::add-mask::$SENHA"
+            echo "SENHA_${k^^}=$SENHA" >> "$GITHUB_ENV"
+          done
+          keytool -list -v -keystore "$D/nova.p12" -storepass "$(grep SENHA_NOVA "$GITHUB_ENV" | cut -d= -f2)" \
+            | sed -n 's/.*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f' | head -1 > "$D/nova.sha256"
+          echo "SHA256_NOVA=$(cat "$D/nova.sha256")" >> "$GITHUB_ENV"
+
+      - name: Construir e assinar os APKs de teste
+        working-directory: mobile/android
+        env:
+          ANDROID_RELEASE_SEM_ASSINATURA: "true"
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          D="$RUNNER_TEMP/chaves"; OUT="$RUNNER_TEMP/apks"; mkdir -p "$OUT"
+          construir() { CR_VERSION_CODE="$1" ./gradlew --no-daemon -q assembleRelease; cp app/build/outputs/apk/release/*.apk "$OUT/u$1.apk"; }
+          assinar_simples() { # $1 entrada $2 saída $3 keystore $4 alias $5 senha
+            "$BT/zipalign" -f -p 4 "$1" "$1.alinhado"
+            "$BT/apksigner" sign --in "$1.alinhado" --out "$2" --ks "$3" --ks-key-alias "$4" --ks-pass "pass:$5" --key-pass "pass:$5"
+          }
+          for v in 100 101 102 103 104; do construir "$v"; done
+          ANTIGA=app/debug.keystore
+          assinar_simples "$OUT/u100.apk" "$OUT/A_atual.apk" "$ANTIGA" androiddebugkey android
+          export CHAVE_NOVA_KS="$D/nova.p12" ANDROID_KEY_ALIAS=teste ANDROID_KEYSTORE_PASSWORD="$SENHA_NOVA" ANDROID_KEY_PASSWORD="$SENHA_NOVA"
+          bash ../../scripts/android/assinar-com-rotacao.sh "$OUT/u101.apk" "$OUT/B_rotacao.apk"
+          bash ../../scripts/android/assinar-com-rotacao.sh "$OUT/u102.apk" "$OUT/C_mesma_chave.apk"
+          assinar_simples "$OUT/u103.apk" "$OUT/D_chave_antiga.apk" "$ANTIGA" androiddebugkey android
+          assinar_simples "$OUT/u104.apk" "$OUT/E_outra_chave.apk" "$D/outra.p12" teste "$SENHA_OUTRA"
+
+          cd "$GITHUB_WORKSPACE"
+          SHA256_NOVA= bash scripts/android/verificar-apk.sh "$OUT/A_atual.apk" 100
+          bash scripts/android/verificar-apk.sh "$OUT/B_rotacao.apk" 101
+          bash scripts/android/verificar-apk.sh "$OUT/C_mesma_chave.apk" 102
+          echo "== a verificação precisa RECUSAR um APK que não instalaria por cima do app atual:"
+          if SHA256_NOVA= bash scripts/android/verificar-apk.sh "$OUT/E_outra_chave.apk" 104; then echo "::error::verificação não barrou APK com outra chave"; exit 1; fi
+          echo "== cadeia de rotação do APK B:"
+          "$BT/apksigner" lineage --in "$OUT/B_rotacao.apk" --print-certs
+
+      - name: Habilitar KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Instalar e atualizar no emulador
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: default
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash scripts/android/testar-instalacao.sh "$RUNNER_TEMP/apks"
+
+  chave-producao:
+    name: Chave de produção (só se os secrets existirem)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir secrets e keystore (sem expor valores)
+        id: chave
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ]; then
+            echo "Secrets ANDROID_* ainda não cadastrados: etapa ignorada (esperado até a chave ser criada)."
+            echo "presente=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          for v in ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            [ -n "${!v}" ] || { echo "::error::secret $v ausente"; exit 1; }
+          done
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/producao.keystore"
+          keytool -list -v -keystore "$RUNNER_TEMP/producao.keystore" -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS" > "$RUNNER_TEMP/info.txt" || { echo "::error::senha do keystore ou alias incorretos"; exit 1; }
+          grep -E "Alias name|Owner|Valid|SHA256:|Signature algorithm|Key Algorithm" "$RUNNER_TEMP/info.txt"
+          SHA="$(sed -n 's/.*SHA256: //p' "$RUNNER_TEMP/info.txt" | tr -d ':' | tr 'A-F' 'a-f' | head -1)"
+          [ "$SHA" != "2ac3d195b7384f4ac4b9e015113488b220d8979ab4f9acfda614738c990268b7" ] \
+            || { echo "::error::a chave de produção não pode ser a debug.keystore pública"; exit 1; }
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "presente=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v4
+        if: steps.chave.outputs.presente == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        if: steps.chave.outputs.presente == 'true'
+        with:
+          node-version: "22"
+      - name: Assinar um APK de teste com rotação para a chave de produção e verificar
+        if: steps.chave.outputs.presente == 'true'
+        env:
+          ANDROID_RELEASE_SEM_ASSINATURA: "true"
+          CR_VERSION_CODE: "999999"
+          CHAVE_NOVA_KS: ${{ runner.temp }}/producao.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SHA256_NOVA: ${{ steps.chave.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          (cd mobile && npm ci && npx cap sync android)
+          (cd mobile/android && chmod +x gradlew && ./gradlew --no-daemon -q assembleRelease)
+          UNS="$(ls mobile/android/app/build/outputs/apk/release/*.apk)"
+          bash scripts/android/assinar-com-rotacao.sh "$UNS" "$RUNNER_TEMP/teste-producao.apk"
+          bash scripts/android/verificar-apk.sh "$RUNNER_TEMP/teste-producao.apk" 999999
+          rm -f "$RUNNER_TEMP/teste-producao.apk" "$RUNNER_TEMP/producao.keystore"
+          echo "Chave de produção válida e rotação verificada. Nenhum APK foi publicado."

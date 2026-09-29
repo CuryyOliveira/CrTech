@@ -17,22 +17,13 @@ android {
         }
     }
     signingConfigs {
-        // Chave de desenvolvimento versionada: mantém a mesma assinatura entre builds,
-        // permitindo instalar atualizações por cima sem desinstalar o app.
+        // Chave ATUAL do app instalado nos celulares (versionada e pública).
+        // Continua sendo usada até a transição para a chave de produção (docs/ANDROID_SIGNING.md).
         debug {
             storeFile file('debug.keystore')
             storePassword 'android'
             keyAlias 'androiddebugkey'
             keyPassword 'android'
-        }
-        // Chave de publicação: informe via variáveis de ambiente (ex.: segredos do GitHub Actions).
-        if (System.getenv('CR_KEYSTORE_FILE')) {
-            release {
-                storeFile file(System.getenv('CR_KEYSTORE_FILE'))
-                storePassword System.getenv('CR_KEYSTORE_PASSWORD')
-                keyAlias System.getenv('CR_KEY_ALIAS')
-                keyPassword System.getenv('CR_KEY_PASSWORD')
-            }
         }
     }
     buildTypes {
@@ -42,8 +33,11 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            // Sem chave de publicação configurada, assina com a chave versionada para gerar um APK instalável.
-            signingConfig System.getenv('CR_KEYSTORE_FILE') ? signingConfigs.release : signingConfigs.debug
+            // A chave de produção NUNCA é aplicada pelo Gradle: um APK assinado só com a chave
+            // nova não instala por cima do app atual. Com ANDROID_RELEASE_SEM_ASSINATURA=true o
+            // release sai sem assinatura e é assinado depois pelo apksigner com ROTAÇÃO de chave
+            // (chave atual -> chave de produção), ver scripts/android/assinar-com-rotacao.sh.
+            signingConfig System.getenv('ANDROID_RELEASE_SEM_ASSINATURA') == 'true' ? null : signingConfigs.debug
         }
     }
     applicationVariants.all { variant ->

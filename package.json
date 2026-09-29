@@ -11,7 +11,11 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "start": "node dist/server/index.mjs",
-    "deploy": "vite build && npx --yes wrangler@4 deploy --config dist/server/wrangler.json"
+    "deploy": "vite build && npx --yes wrangler@4 deploy --config dist/server/wrangler.json",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:db": "vitest run --project db",
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -76,6 +80,7 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@types/node": "^22.16.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
@@ -86,11 +91,13 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "nitro": "3.0.260603-beta",
+    "pg": "^8.23.0",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.1.5",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^3.2.7"
   },
   "pnpm": {
     "overrides": {

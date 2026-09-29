@@ -34,3 +34,7 @@ dist-ssr
 # APKs baixados/gerados localmente
 apk/
 *.apk
+
+# Banco de teste local
+.pg-teste/
+.pg-teste.senha

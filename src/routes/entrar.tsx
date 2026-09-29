@@ -193,8 +193,15 @@ function Login() {
       if (error) {
         entrando.current = false;
         setCarregando(false);
-        toast.error(error.message);
-        void registrarTentativaLogin({ data: { email, senha } }).catch(() => {});
+        // Mensagem única: não revela se a conta existe nem o motivo exato da recusa.
+        toast.error("E-mail ou senha inválidos.");
+        // A senha nunca é enviada: o servidor só registra que o login foi recusado.
+        const motivo = /not confirmed/i.test(error.message)
+          ? "email_nao_confirmado"
+          : /invalid/i.test(error.message)
+            ? "credenciais_invalidas"
+            : "recusado";
+        void registrarTentativaLogin({ data: { email, motivo } }).catch(() => {});
         return;
       }
       limparContextoUsuario();

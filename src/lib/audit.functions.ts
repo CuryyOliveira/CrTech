@@ -1,89 +1,45 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeader } from "@tanstack/react-start/server";
+import type { MotivoTentativa } from "@/lib/tentativas-login.server";
 
 /**
  * Registro de tentativas de login inválidas — precisa do cliente privilegiado
  * porque não existe sessão no momento da falha.
  *
- * Segurança: a falha é confirmada no servidor (a credencial enviada é testada
- * de novo e só é registrada se realmente for recusada), o motivo é gerado pelo
- * próprio servidor e há limite de frequência por e-mail/IP para evitar que
- * alguém polua o log de auditoria com entradas forjadas.
+ * Segurança (ver src/lib/tentativas-login.server.ts):
+ *  - a senha NUNCA é enviada nem testada aqui (a autenticação é do Supabase Auth);
+ *  - a resposta é sempre a mesma, para não permitir descobrir senhas nem contas;
+ *  - o limite de frequência é persistente no banco (por e-mail e por IP, em hash).
  */
-
-/** Janela e teto do limite de frequência (por e-mail e por IP). */
-const JANELA_MS = 5 * 60 * 1000;
-const MAX_REGISTROS = 5;
-const contadores = new Map<string, { inicio: number; total: number }>();
-
-function excedeuLimite(chave: string) {
-  const agora = Date.now();
-  const atual = contadores.get(chave);
-  if (!atual || agora - atual.inicio > JANELA_MS) {
-    contadores.set(chave, { inicio: agora, total: 1 });
-    return false;
-  }
-  atual.total += 1;
-  return atual.total > MAX_REGISTROS;
-}
-
 export const registrarTentativaLogin = createServerFn({ method: "POST" })
-  .inputValidator((d: { email: string; senha: string }) => ({
-    email: String(d.email ?? "")
-      .trim()
-      .slice(0, 200),
-    senha: String(d.senha ?? "").slice(0, 200),
+  .inputValidator((d: { email: string; motivo?: MotivoTentativa }) => ({
+    // Só estes campos são lidos; qualquer outro (inclusive uma senha) é descartado.
+    email: typeof d?.email === "string" ? d.email.slice(0, 254) : "",
+    motivo: typeof d?.motivo === "string" ? d.motivo.slice(0, 40) : undefined,
   }))
   .handler(async ({ data }) => {
-    if (!data.email || !data.senha) return { ok: false };
-
     const ip =
       getRequestHeader("cf-connecting-ip") ??
       getRequestHeader("x-forwarded-for")?.split(",")[0]?.trim() ??
       "desconhecido";
-    if (excedeuLimite(`e:${data.email.toLowerCase()}`) || excedeuLimite(`i:${ip}`))
-      return { ok: false };
 
-    // Confirma no servidor que a credencial realmente é recusada pelo Auth.
-    const { createClient } = await import("@supabase/supabase-js");
-    const key = process.env["SUPABASE_PUBLISHABLE_KEY"] ?? process.env["SUPABASE_ANON_KEY"]!;
-    const client = createClient(process.env["SUPABASE_URL"]!, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: {
-        fetch: (input: any, init?: any) => {
-          const h = new Headers(init?.headers);
-          if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`)
-            h.delete("Authorization");
-          h.set("apikey", key);
-          return fetch(input, { ...init, headers: h });
-        },
+    const { processarTentativaLogin, sha256 } = await import("@/lib/tentativas-login.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = supabaseAdmin as any;
+    return processarTentativaLogin(data, ip, {
+      hash: sha256,
+      consumirLimite: async (chave, maximo, janelaSegundos) => {
+        const { data: dentro, error } = await admin.rpc("consumir_limite_tentativa", {
+          _chave: chave,
+          _maximo: maximo,
+          _janela_segundos: janelaSegundos,
+        });
+        // Sem a função no banco (migration não aplicada) ou com erro: não registra.
+        return !error && dentro === true;
+      },
+      registrar: async (registro) => {
+        await admin.from("auditoria").insert({ ...registro, user_id: null, nome: null });
       },
     });
-    const { data: sessao, error } = await client.auth.signInWithPassword({
-      email: data.email,
-      password: data.senha,
-    });
-    if (!error) {
-      // Credencial válida: nada a registrar (e a sessão criada é descartada).
-      await client.auth.signOut().catch(() => {});
-      return { ok: false };
-    }
-    if (sessao?.session) return { ok: false };
-
-    const motivo =
-      error.status === 400 || error.message.toLowerCase().includes("credentials")
-        ? "credenciais inválidas"
-        : "acesso recusado pelo servidor de autenticação";
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("auditoria").insert({
-      usuario: data.email,
-      nome: null,
-      tipo_acao: "autenticacao",
-      acao: "login_invalido",
-      detalhe: `Tentativa de login inválida: ${motivo}`,
-      resultado: "erro",
-      ip,
-    });
-    return { ok: true };
   });

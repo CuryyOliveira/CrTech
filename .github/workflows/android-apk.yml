@@ -48,37 +48,46 @@ jobs:
       - name: Sincronizar projeto Android
         run: npx cap sync android
 
-      - name: Chave de publicação (opcional)
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-            echo "CR_KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
-            echo "Assinando com a chave de publicação."
-          else
-            echo "Sem ANDROID_KEYSTORE_BASE64: o release será assinado com a chave versionada do projeto."
-          fi
-
-      - name: Testes, lint e build (debug + release)
+      - name: Build (debug + release), testes e lint
         working-directory: mobile/android
         env:
-          CR_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          CR_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          CR_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # Com a rotação aprovada, o release sai sem assinatura e é assinado no passo seguinte.
+          ANDROID_RELEASE_SEM_ASSINATURA: ${{ vars.ANDROID_ROTACAO_APROVADA == 'true' && secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleRelease
 
-      - name: Verificar APKs
+      - name: Assinar o release com rotação de chave (somente com aprovação explícita)
+        if: ${{ vars.ANDROID_ROTACAO_APROVADA == 'true' }}
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ -n "$KS_B64" ] || { echo "::error::ANDROID_ROTACAO_APROVADA=true, mas o secret ANDROID_KEYSTORE_BASE64 não existe"; exit 1; }
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/producao.keystore"
+          export CHAVE_NOVA_KS="$RUNNER_TEMP/producao.keystore"
+          D=mobile/android/app/build/outputs/apk/release
+          UNS="$(ls "$D"/*.apk)"
+          mv "$UNS" "$RUNNER_TEMP/sem-assinatura.apk"
+          bash scripts/android/assinar-com-rotacao.sh "$RUNNER_TEMP/sem-assinatura.apk" "$UNS"
+          SHA="$(keytool -list -v -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" \
+            | sed -n 's/.*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f' | head -1)"
+          echo "SHA256_NOVA=$SHA" >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/producao.keystore" "$RUNNER_TEMP/sem-assinatura.apk"
+
+      - name: Verificar APKs (bloqueia a publicação de APK que não atualizaria o app instalado)
         working-directory: mobile/android/app/build/outputs/apk
         run: |
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           for apk in debug/*.apk release/*.apk; do
             echo "== $apk ($(du -h "$apk" | cut -f1))"
-            "$BT/apksigner" verify --print-certs "$apk" | head -3
+            "$BT/apksigner" verify --print-certs "$apk" | head -6
             "$BT/aapt2" dump badging "$apk" | grep -E "^(package|sdkVersion|targetSdkVersion|native-code|application-label)" || true
           done
+          bash "$GITHUB_WORKSPACE/scripts/android/verificar-apk.sh" release/*.apk "$CR_VERSION_CODE"
           mkdir -p "$GITHUB_WORKSPACE/apk"
           cp debug/*.apk release/*.apk "$GITHUB_WORKSPACE/apk/"
           (cd "$GITHUB_WORKSPACE/apk" && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
