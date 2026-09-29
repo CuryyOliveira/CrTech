@@ -72,8 +72,15 @@ jobs:
           for v in ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             [ -n "${!v}" ] || { echo "::error::secret $v ausente"; exit 1; }
           done
-          printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/producao.keystore" \
-            || { echo "::error::ANDROID_KEYSTORE_BASE64 não é um base64 válido"; exit 1; }
+          # Aceita os formatos comuns ao colar o secret: quebras de linha, cabeçalho PEM
+          # (-----BEGIN ...-----), prefixo data:...;base64, base64url (-_) e falta de "=".
+          B64="$(printf '%s' "$KS_B64" | sed -e '/^-----/d' -e 's/^data:[^,]*,//' | tr -d '[:space:]' | tr -- '-_' '+/')"
+          while [ $(( ${#B64} % 4 )) -ne 0 ]; do B64="$B64="; done
+          if ! printf '%s' "$B64" | base64 -d > "$RUNNER_TEMP/producao.keystore" 2>/dev/null; then
+            INVALIDOS="$(printf '%s' "$B64" | tr -d 'A-Za-z0-9+/=' | wc -c)"
+            echo "::error::ANDROID_KEYSTORE_BASE64 não é um base64 válido (tamanho ${#KS_B64}, caracteres fora do base64: $INVALIDOS). Gere com: base64 -w0 sua-chave.jks (Linux) ou base64 -i sua-chave.jks (macOS) ou [Convert]::ToBase64String([IO.File]::ReadAllBytes('sua-chave.jks')) (Windows)"
+            exit 1
+          fi
           export CHAVE_NOVA_KS="$RUNNER_TEMP/producao.keystore"
           keytool -list -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" >/dev/null \
             || { echo "::error::senha do keystore (ANDROID_KEYSTORE_PASSWORD) ou alias (ANDROID_KEY_ALIAS) incorretos"; exit 1; }
