@@ -14,6 +14,13 @@ Registradas durante a publicação da V2 (29/09/2026). Nenhum item abaixo impede
 - O sistema exige Android System WebView 111+. Aparelhos antigos veem o aviso "Atualize o
   navegador do aparelho". Avaliar alternativa para aparelhos sem Play Store.
 
+## Segurança (avisos do Supabase Advisor, nível WARN)
+- Ativar "Leaked password protection" no Supabase Auth (painel → Authentication).
+- Fixar `search_path` em 5 funções auxiliares sem acesso a tabelas (`cursor_sync_inicial`,
+  `conferencia_encerrada`, `alteracao_privilegiada`, `hora_evento`, `ler_cursor`).
+- Revisar as funções SECURITY DEFINER expostas a `authenticated` (as administrativas já
+  validam nível e empresa internamente).
+
 ## Limpeza
 - Remover o código da conferência V1 (mantido como fallback: `VITE_CONFERENCE_V2=0`) depois de
   um período estável em produção.
