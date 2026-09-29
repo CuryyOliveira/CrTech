@@ -114,7 +114,9 @@ async function calibrar(d: AndroidDevice, page: Page) {
 
 async function tocar(d: AndroidDevice, page: Page, seletor: string) {
   const el = page.locator(seletor).first();
-  await el.scrollIntoViewIfNeeded();
+  // Centraliza: rente à borda o toque real pode cair na barra fixa de baixo.
+  await el.evaluate((e) => e.scrollIntoView({ block: "center" }));
+  await esperar(400);
   const c = (await el.boundingBox())!;
   const x = Math.round((c.x + c.width / 2) * calib.dpr + calib.dx);
   const y = Math.round((c.y + c.height / 2) * calib.dpr + calib.dy);
