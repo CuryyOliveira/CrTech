@@ -371,8 +371,19 @@ async function main() {
     return page.getByLabel("QUANTIDADE CONFERIDA").isEnabled();
   });
 
+  // Na rotação o WebView pode reabrir o canal de depuração (o app continua na mesma página):
+  // reconecta o teste à página atual antes de continuar.
+  const reconectar = async () => {
+    if (!page.isClosed()) return;
+    const wv = await d.webView({ pkg: PKG }, { timeout: 30_000 });
+    page = await wv.page();
+    page.on("pageerror", (e) => resultado.errosJs.push(String(e.message ?? e).slice(0, 300)));
+  };
+
   await etapa("rotação para paisagem e de volta", async () => {
     await girar(d, 1);
+    await reconectar();
+    await page.getByTestId("item-atual").waitFor({ timeout: 30_000 });
     const p = await page.evaluate(() => [
       innerWidth,
       innerHeight,
@@ -382,8 +393,15 @@ async function main() {
     const confirmar = await page.getByRole("button", { name: "CONFIRMAR" }).isVisible();
     await tela(d, "05-paisagem");
     await girar(d, 0);
+    await reconectar();
+    await page.getByTestId("item-atual").waitFor({ timeout: 30_000 });
+    // A conferência continua no mesmo ponto depois de girar (nada recarregado/perdido).
+    const progresso = await texto(page, "progresso");
     await calibrar(d, page);
-    return { ok: p[0] > p[1] && p[2] <= p[3] && confirmar, detalhe: p };
+    return {
+      ok: p[0] > p[1] && p[2] <= p[3] && confirmar && progresso === `1 / ${LISTA.itens}`,
+      detalhe: { dimensoes: p, progresso },
+    };
   });
 
   // Dado inicial sincronizado antes de cortar a rede

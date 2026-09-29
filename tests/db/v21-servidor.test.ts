@@ -154,8 +154,9 @@ it("carga inicial e pull de 1.000 itens ficam bem abaixo do statement_timeout (8
     });
   const snap = await medir("SELECT snapshot_sync('conferencia_itens', null, 500) AS r", []);
   expect(snap.r.linhas).toHaveLength(500);
-  expect(snap.ms).toBeLessThan(2000);
+  // Limite real do Supabase para usuários autenticados: 8 s (linha a linha passava de 10 s).
+  expect(snap.ms).toBeLessThan(5000);
   const pull = await medir("SELECT alteracoes_sync($1, 500) AS r", [cursor.c]);
   expect(pull.r.alteracoes.length).toBeGreaterThan(0);
-  expect(pull.ms).toBeLessThan(2000);
+  expect(pull.ms).toBeLessThan(5000);
 });
