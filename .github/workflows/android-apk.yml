@@ -59,6 +59,8 @@ jobs:
 
       - name: Assinar o release com rotação de chave (somente com aprovação explícita)
         if: ${{ vars.ANDROID_ROTACAO_APROVADA == 'true' }}
+        # Caminhos a partir da raiz do repositório (o padrão do job é a pasta mobile/).
+        working-directory: ${{ github.workspace }}
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -67,12 +69,19 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "$KS_B64" ] || { echo "::error::ANDROID_ROTACAO_APROVADA=true, mas o secret ANDROID_KEYSTORE_BASE64 não existe"; exit 1; }
-          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/producao.keystore"
+          for v in ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            [ -n "${!v}" ] || { echo "::error::secret $v ausente"; exit 1; }
+          done
+          printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/producao.keystore" \
+            || { echo "::error::ANDROID_KEYSTORE_BASE64 não é um base64 válido"; exit 1; }
           export CHAVE_NOVA_KS="$RUNNER_TEMP/producao.keystore"
+          keytool -list -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" >/dev/null \
+            || { echo "::error::senha do keystore (ANDROID_KEYSTORE_PASSWORD) ou alias (ANDROID_KEY_ALIAS) incorretos"; exit 1; }
           D=mobile/android/app/build/outputs/apk/release
           UNS="$(ls "$D"/*.apk)"
           mv "$UNS" "$RUNNER_TEMP/sem-assinatura.apk"
-          bash scripts/android/assinar-com-rotacao.sh "$RUNNER_TEMP/sem-assinatura.apk" "$UNS"
+          bash scripts/android/assinar-com-rotacao.sh "$RUNNER_TEMP/sem-assinatura.apk" "$UNS" \
+            || { echo "::error::falha ao assinar com rotação (confira ANDROID_KEY_PASSWORD)"; exit 1; }
           SHA="$(keytool -list -v -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" \
             | sed -n 's/.*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f' | head -1)"
           echo "SHA256_NOVA=$SHA" >> "$GITHUB_ENV"
