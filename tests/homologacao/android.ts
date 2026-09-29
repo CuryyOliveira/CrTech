@@ -104,11 +104,25 @@ async function calibrar(d: AndroidDevice, page: Page) {
       { once: true, capture: true },
     );
   });
-  const [lx, ly] = [300, 900];
-  await sh(d, `input tap ${lx} ${ly}`);
-  await esperar(500);
-  const t = await page.evaluate(() => (window as unknown as { __toque?: number[] }).__toque);
-  calib = t ? { dpr, dx: lx - t[0] * dpr, dy: ly - t[1] * dpr } : { dpr, dx: 0, dy: 0 };
+  // Toca no centro horizontal, na altura do placar de progresso (área sem botões nem campos).
+  const alvo = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="progresso"]');
+    const r = el ? el.getBoundingClientRect() : null;
+    return { x: innerWidth / 2, y: r ? r.top + r.height / 2 : innerHeight * 0.3 };
+  });
+  let t: number[] | undefined;
+  let lx = 0;
+  let ly = 0;
+  for (let tentativa = 0; tentativa < 3 && !t; tentativa++) {
+    lx = Math.round(alvo.x * dpr + calib.dx);
+    ly = Math.round(alvo.y * dpr + calib.dy + tentativa * 40);
+    await sh(d, `input tap ${lx} ${ly}`);
+    await esperar(500);
+    t = await page.evaluate(() => (window as unknown as { __toque?: number[] }).__toque);
+  }
+  if (t) calib = { dpr, dx: lx - t[0] * dpr, dy: ly - t[1] * dpr };
+  // O toque de calibração não pode deixar foco/teclado aberto.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   return calib;
 }
 
