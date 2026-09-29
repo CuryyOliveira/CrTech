@@ -7,6 +7,7 @@ import { SkeletonLista } from "@/components/admin/ui-admin";
 import { dadosGovernanca } from "@/lib/admin-users.functions";
 import { fmtDateTime } from "@/lib/app";
 import { NIVEIS } from "@/lib/permissions";
+import { usePermissoes } from "@/hooks/usePermissoes";
 
 type Governanca = {
   user_id: string;
@@ -22,6 +23,7 @@ type Governanca = {
 
 /** Seção de Governança: identidade e status do Proprietário do Sistema. */
 export function Governanca() {
+  const { nivel } = usePermissoes();
   const carregar = useServerFn(dadosGovernanca);
   const { data, isLoading } = useQuery({
     queryKey: ["governanca"],
@@ -81,8 +83,9 @@ export function Governanca() {
           <ol className="space-y-1 text-sm">
             {NIVEIS.map((n) => (
               <li key={n.nivel} className="flex items-center gap-2">
-                <span className="w-6 text-muted-foreground">{5 - n.nivel}.</span>
+                <span className="w-16 text-muted-foreground">Nível {n.nivel}</span>
                 <span className="font-medium">{n.label}</span>
+                {n.nivel === nivel && <Badge variant="secondary">Seu nível</Badge>}
               </li>
             ))}
           </ol>
