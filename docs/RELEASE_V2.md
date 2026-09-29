@@ -48,9 +48,17 @@ Verificação depois das migrations:
   de produção (rotação a partir da chave atual, `docs/ANDROID_SIGNING.md`). Sem a chave, o workflow
   publica apenas um pré-release de teste.
 
+### APK final publicado
+
+- Release: https://github.com/CuryyOliveira/CrTech/releases/tag/android-v2.0.0
+- Arquivo: `conferencia-rapida-2.0.0-release.apk` (versionCode 12)
+- SHA-256: `db60647beae6030873335fbc5befcf77b352f18694235d41ce7c36ddcd447c07`
+- Assinado com a chave de produção, com rotação a partir da chave anterior (verificado no
+  workflow por `scripts/android/verificar-apk.sh`); sem endereço local no release.
+
 ## Limitações conhecidas
 
-- A chave de produção Android precisa ser criada pelo proprietário (fora deste ambiente) e
-  cadastrada nos secrets do GitHub (`docs/ANDROID_SIGNING.md` §4/§6) para gerar o APK final.
+- Android 7/8 continuam verificando a chave anterior (esquema v2); Android 9+ passa a exigir a
+  chave de produção (`docs/ANDROID_SIGNING.md`).
 - Exige Android System WebView 111+ (aparelhos antigos veem o aviso de atualização).
 - Melhorias futuras: `docs/BACKLOG_V3.md`.
