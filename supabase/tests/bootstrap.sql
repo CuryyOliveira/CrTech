@@ -89,3 +89,28 @@ DO $$ BEGIN
   END IF;
 END $$;
 ALTER PUBLICATION supabase_realtime OWNER TO postgres;
+
+-- Storage (mínimo): bucket e objetos, como no Supabase, para testar as policies de fotos.
+CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION postgres;
+CREATE TABLE IF NOT EXISTS storage.buckets (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  public boolean DEFAULT false,
+  file_size_limit bigint,
+  allowed_mime_types text[],
+  created_at timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS storage.objects (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  bucket_id text REFERENCES storage.buckets(id),
+  name text NOT NULL,
+  owner uuid DEFAULT auth.uid(),
+  metadata jsonb,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE (bucket_id, name)
+);
+ALTER TABLE storage.buckets OWNER TO postgres;
+ALTER TABLE storage.objects OWNER TO postgres;
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
+GRANT ALL ON storage.buckets, storage.objects TO authenticated, service_role;
