@@ -625,6 +625,20 @@ main()
   .catch((e) => registrar("execução", false, String((e as Error)?.stack ?? e).slice(0, 800)))
   .finally(async () => {
     writeFileSync(path.join(SAIDA, "resultado.json"), JSON.stringify(resultado, null, 2));
+    if (process.env.GITHUB_ACTIONS) {
+      // Resumo como anotações do GitHub Actions (legíveis sem baixar os logs do job).
+      const limpar = (s: string) => s.replace(/[\r\n%]/g, " ").slice(0, 900);
+      const api = resultado.aparelho?.api ?? "?";
+      const ok = resultado.etapas.filter((e) => e.ok).map((e) => e.nome);
+      console.log(
+        `::notice title=Android ${api} — passaram (${ok.length})::${limpar(ok.join(" | "))}`,
+      );
+      for (const e of resultado.etapas.filter((x) => !x.ok).slice(0, 9)) {
+        console.log(
+          `::error title=Android ${api} — ${limpar(e.nome)}::${limpar(JSON.stringify(e.detalhe ?? ""))}`,
+        );
+      }
+    }
     await encerrar().catch(() => undefined);
     process.exit(resultado.ok ? 0 : 1);
   });
