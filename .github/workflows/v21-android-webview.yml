@@ -29,8 +29,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Android 8: a imagem "default" vem sem provedor de WebView funcional
+          # ("Current WebView package is null"); a google_apis traz o WebView do Google.
           - api: 26
-            target: default
+            target: google_apis
           - api: 30
             target: default
           - api: 34
