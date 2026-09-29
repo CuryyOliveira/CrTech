@@ -16,7 +16,7 @@ import { LISTAS, semear } from "./semear";
 
 const SAIDA = process.argv[2] ?? "android-resultados";
 const PKG = "br.com.conferenciarapida.app";
-const APP = process.env.HOMOLOG_APP_ANDROID ?? "http://localhost:3101";
+const APP = process.env.HOMOLOG_APP_ANDROID ?? "http://127.0.0.1:3101";
 const LISTA = LISTAS.media;
 
 mkdirSync(SAIDA, { recursive: true });
@@ -61,6 +61,23 @@ async function rede(d: AndroidDevice, ligada: boolean) {
   await sh(d, `svc wifi ${ligada ? "enable" : "disable"}`);
   await sh(d, `svc data ${ligada ? "enable" : "disable"}`);
   await tuneis(d, ligada);
+}
+
+async function girar(d: AndroidDevice, rotacao: 0 | 1) {
+  await sh(d, "settings put system accelerometer_rotation 0");
+  await sh(d, `settings put system user_rotation ${rotacao}`);
+  await sh(d, `wm user-rotation lock ${rotacao}`).catch(() => "");
+  await esperar(2500);
+}
+
+async function diagnostico(d: AndroidDevice, nome: string) {
+  await tela(d, `diag-${nome}`);
+  const log = await sh(
+    d,
+    "logcat -d -t 400 chromium:V cr_:V Capacitor:V AndroidRuntime:E ConferenciaRapida:V *:S",
+  ).catch(() => "");
+  writeFileSync(path.join(SAIDA, `diag-${nome}.txt`), log);
+  return log.split("\n").slice(-6).join(" | ").slice(0, 600);
 }
 
 async function abrirApp(d: AndroidDevice, url: string) {
@@ -174,6 +191,12 @@ async function main() {
         .split("\n")
         .find((l) => /Current WebView package/i.test(l))
         ?.trim() ?? "?",
+    webview_versao: (
+      await sh(
+        d,
+        "dumpsys package com.android.webview | grep versionName; dumpsys package com.google.android.webview | grep versionName",
+      )
+    ).replace(/\s+/g, " "),
   };
   console.log("Aparelho:", resultado.aparelho);
   await tuneis(d, true);
@@ -183,9 +206,47 @@ async function main() {
   );
 
   let page!: Page;
+  // WebView sem suporte ao visual do sistema (Chrome/WebView < 111): o app deve mostrar como
+  // atualizar em vez de abrir quebrado. Os fluxos da conferência não se aplicam a esse aparelho.
+  const versaoWebView = Number(/(\d+)\./.exec(resultado.aparelho.webview_versao ?? "")?.[1] ?? 0);
+  if (versaoWebView > 0 && versaoWebView < 111) {
+    await sh(d, `am force-stop ${PKG}`);
+    await sh(d, `am start -W -n ${PKG}/.MainActivity --es cr_url_teste '${APP}/entrar'`);
+    await esperar(15_000);
+    await tela(d, "01-webview-antigo");
+    await sh(d, "uiautomator dump /sdcard/tela.xml").catch(() => "");
+    const xml = await sh(d, "cat /sdcard/tela.xml").catch(() => "");
+    let aviso = /Atualize o navegador do aparelho/.test(xml);
+    if (!aviso) {
+      const wv = await d.webView({ pkg: PKG }, { timeout: 20_000 }).catch(() => null);
+      const pg = wv ? await wv.page().catch(() => null) : null;
+      aviso = pg
+        ? (await pg
+            .locator("#cr-navegador-antigo")
+            .count()
+            .catch(() => 0)) > 0
+        : false;
+    }
+    registrar(
+      `WebView antigo (${versaoWebView}): mostra como atualizar em vez de abrir quebrado`,
+      aviso,
+      aviso ? undefined : await diagnostico(d, "webview-antigo"),
+    );
+    registrar(
+      "fluxos da conferência",
+      true,
+      `não executados: WebView ${versaoWebView} < 111 não é suportado (o aparelho precisa atualizar o Android System WebView)`,
+    );
+    return;
+  }
+
   await etapa("abertura do aplicativo", async () => {
-    page = await abrirApp(d, `${APP}/entrar`);
-    await page.locator("#login-email").waitFor({ timeout: 60_000 });
+    try {
+      page = await abrirApp(d, `${APP}/entrar`);
+      await page.locator("#login-email").waitFor({ timeout: 60_000 });
+    } catch (e) {
+      throw new Error(`${String(e).split("\n")[0]} — ${await diagnostico(d, "abertura")}`);
+    }
     await tela(d, "01-login");
     return true;
   });
@@ -239,11 +300,11 @@ async function main() {
   });
 
   await etapa("quantidade: digitação pelo teclado do Android + confirmar", async () => {
-    await d.input.type("2");
+    await sh(d, "input text 2");
     await esperar(300);
     await page.getByRole("button", { name: "CONFIRMAR" }).click();
     await esperar(800);
-    await d.input.press("Back").catch(() => undefined);
+    await sh(d, "input keyevent KEYCODE_BACK").catch(() => undefined);
     const p = await texto(page, "progresso");
     return { ok: p === `1 / ${LISTA.itens}`, detalhe: p };
   });
@@ -304,8 +365,7 @@ async function main() {
   });
 
   await etapa("rotação para paisagem e de volta", async () => {
-    await sh(d, "settings put system user_rotation 1");
-    await esperar(2500);
+    await girar(d, 1);
     const p = await page.evaluate(() => [
       innerWidth,
       innerHeight,
@@ -314,8 +374,7 @@ async function main() {
     ]);
     const confirmar = await page.getByRole("button", { name: "CONFIRMAR" }).isVisible();
     await tela(d, "05-paisagem");
-    await sh(d, "settings put system user_rotation 0");
-    await esperar(2000);
+    await girar(d, 0);
     await calibrar(d, page);
     return { ok: p[0] > p[1] && p[2] <= p[3] && confirmar, detalhe: p };
   });
@@ -335,6 +394,12 @@ async function main() {
     "SELECT material_id, coalesce(versao, 0)::int AS versao FROM conferencia_itens WHERE conferencia_id = $1 AND codigo = 'H0003'",
     [conf.id],
   );
+
+  const sw = await page.evaluate(async () => ({
+    controlada: Boolean(navigator.serviceWorker && navigator.serviceWorker.controller),
+    caches: "caches" in window ? await caches.keys() : [],
+  }));
+  registrar("service worker ativo antes de cortar a rede", sw.controlada, sw);
 
   await etapa("sem internet (Wi-Fi e dados desligados de verdade)", async () => {
     await rede(d, false);
@@ -385,7 +450,14 @@ async function main() {
 
   await etapa("fechamento do aplicativo e reabertura sem internet", async () => {
     page = await abrirApp(d, `${APP}/unidade/${LISTA.id}`);
-    await page.getByTestId("item-atual").waitFor({ timeout: 60_000 });
+    try {
+      await page.getByTestId("item-atual").waitFor({ timeout: 60_000 });
+    } catch (e) {
+      const url = await page.evaluate(() => location.href).catch(() => "?");
+      throw new Error(
+        `${String(e).split("\n")[0]} — url=${url} — ${await diagnostico(d, "reabertura")}`,
+      );
+    }
     const p = await texto(page, "progresso");
     await tela(d, "07-reaberto-offline");
     return { ok: p === `3 / ${LISTA.itens}`, detalhe: p };
@@ -393,7 +465,7 @@ async function main() {
   await calibrar(d, page);
 
   await etapa("botão voltar com alterações pendentes pede confirmação", async () => {
-    await d.input.press("Back");
+    await sh(d, "input keyevent KEYCODE_BACK");
     await esperar(1500);
     const aviso = await page
       .getByText("Existem alterações ainda não sincronizadas.")
@@ -455,7 +527,7 @@ async function main() {
     const f = await foco();
     await tela(d, "10-camera");
     for (let i = 0; i < 3 && !(await foco()).includes("MainActivity"); i++) {
-      await d.input.press("Back");
+      await sh(d, "input keyevent KEYCODE_BACK");
       await esperar(1200);
     }
     return { ok: !f.includes(`${PKG}/${PKG}.MainActivity`), detalhe: f };

@@ -34,13 +34,13 @@ app() {
   eval "$(variaveis)"
   cd "$RAIZ"
   rm -rf dist
-  NITRO_PRESET=node-server VITE_SUPABASE_URL="http://localhost:54321" \
+  NITRO_PRESET=node-server VITE_SUPABASE_URL="http://127.0.0.1:54321" \
     VITE_SUPABASE_PUBLISHABLE_KEY="$HOMOLOG_ANON_KEY" VITE_CONFERENCE_V2="$v" npx vite build >/dev/null
   rm -rf "$DIR/app-v$v" && cp -r dist "$DIR/app-v$v"
   node tests/homologacao/corrigir-manifesto.mjs "$DIR/app-v$v"
   cd "$DIR/app-v$v"
   SUPABASE_URL="$HOMOLOG_SUPABASE_URL" SUPABASE_PUBLISHABLE_KEY="$HOMOLOG_ANON_KEY" \
-    SUPABASE_SERVICE_ROLE_KEY="$HOMOLOG_SERVICE_ROLE_KEY" APP_URL="http://localhost:$porta" PORT="$porta" \
+    SUPABASE_SERVICE_ROLE_KEY="$HOMOLOG_SERVICE_ROLE_KEY" APP_URL="http://127.0.0.1:$porta" PORT="$porta" \
     nohup node server/index.mjs >"$DIR/app-v$v.log" 2>&1 &
   for _ in $(seq 1 60); do curl -sf "http://localhost:$porta/" >/dev/null && break; sleep 1; done
   echo "app (VITE_CONFERENCE_V2=$v) em http://localhost:$porta"

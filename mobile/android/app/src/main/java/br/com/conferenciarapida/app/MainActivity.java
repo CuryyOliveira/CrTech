@@ -108,7 +108,7 @@ public class MainActivity extends BridgeActivity {
     private String urlInicial() {
         boolean debug = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
         String teste = getIntent() != null ? getIntent().getStringExtra("cr_url_teste") : null;
-        if (debug && teste != null && teste.startsWith("http://localhost:")) {
+        if (debug && teste != null && (teste.startsWith("http://127.0.0.1:") || teste.startsWith("http://localhost:"))) {
             Log.i(TAG, "Build de debug: abrindo URL de teste " + teste);
             // Testes automatizados controlam o WebView pelo DevTools (só debug + URL de teste).
             WebView.setWebContentsDebuggingEnabled(true);

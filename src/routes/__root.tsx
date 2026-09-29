@@ -15,7 +15,7 @@ import { StatusConexao } from "@/components/StatusConexao";
 import { SyncV2 } from "@/components/sync-v2/SyncV2";
 import { MOTOR_V2_ATIVO } from "@/lib/conferencia-v2/flag";
 import { registrarServiceWorker } from "@/lib/offline/sw";
-
+import { SCRIPT_NAVEGADOR_ANTIGO } from "@/lib/navegador-antigo";
 
 function NotFoundComponent() {
   return (
@@ -82,7 +82,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Conferência de Materiais — Acesso" },
       {
         name: "description",
-        content: "Sistema de conferência de materiais da oficina: frota de caminhões, caixas de ferramentas e contagem de estoque.",
+        content:
+          "Sistema de conferência de materiais da oficina: frota de caminhões, caixas de ferramentas e contagem de estoque.",
       },
       { name: "theme-color", content: "#ea580c" },
       {
@@ -92,12 +93,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "Conferência de Materiais — Acesso" },
       {
         property: "og:description",
-        content: "Sistema de conferência de materiais da oficina: frota de caminhões, caixas de ferramentas e contagem de estoque.",
+        content:
+          "Sistema de conferência de materiais da oficina: frota de caminhões, caixas de ferramentas e contagem de estoque.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Conferência de Materiais — Acesso" },
-      { name: "twitter:description", content: "Sistema de conferência de materiais da oficina: frota de caminhões, caixas de ferramentas e contagem de estoque." },
+      {
+        name: "twitter:description",
+        content:
+          "Sistema de conferência de materiais da oficina: frota de caminhões, caixas de ferramentas e contagem de estoque.",
+      },
       { property: "og:image", content: "https://conferenciarapida.com.br/icon-512.png" },
       { name: "twitter:image", content: "https://conferenciarapida.com.br/icon-512.png" },
     ],
@@ -110,7 +116,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/icon-512.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
-
     ],
 
     scripts: [
@@ -161,6 +166,8 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        {/* ES5 puro: em WebView desatualizado mostra como atualizar (nos atuais não faz nada). */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_NAVEGADOR_ANTIGO }} />
         {children}
         <Scripts />
       </body>
@@ -186,4 +193,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
