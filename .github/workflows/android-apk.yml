@@ -104,6 +104,7 @@ jobs:
           SHA="$(keytool -list -v -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" \
             | sed -n 's/.*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f' | head -1)"
           echo "SHA256_NOVA=$SHA" >> "$GITHUB_ENV"
+          echo "Release assinado com rotação para a chave de produção (SHA-256 $SHA)."
           rm -f "$RUNNER_TEMP/producao.keystore" "$RUNNER_TEMP/sem-assinatura.apk"
 
       - name: Verificar APKs (bloqueia a publicação de APK que não atualizaria o app instalado)
