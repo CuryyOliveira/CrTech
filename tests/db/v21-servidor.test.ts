@@ -75,33 +75,22 @@ it("ao finalizar, o Histórico Operacional recebe os totais calculados no servid
   expect(Number(h.percentual)).toBe(Math.round(100 / itens.length));
 });
 
-it("carga inicial: itens só de conferências abertas ou encerradas há menos de 24 h", async () => {
-  // Fixture: 0000…03a1 finalizada há 2 h (itens vêm); aqui ela passa a ter terminado há 3 dias.
-  const antiga = "00000000-0000-4000-8000-0000000003a1";
-  const itens = async () =>
+it("carga inicial: itens só de conferências abertas (encerradas trazem só o cabeçalho)", async () => {
+  const encerrada = "00000000-0000-4000-8000-0000000003a1"; // finalizada há 2 h (fixture)
+  const snapshot = async (tabela: string) =>
     (
       await db.como(
         ESTQ_A,
-        async (q) => (await q("SELECT snapshot_sync('conferencia_itens', null, 1000) AS r"))[0].r,
+        async (q) => (await q("SELECT snapshot_sync($1, null, 1000) AS r", [tabela]))[0].r,
       )
-    ).linhas.map((l: { conferencia_id: string }) => l.conferencia_id) as string[];
-  expect(await itens()).toContain(antiga);
-  await db.dono(
-    "UPDATE conferencias SET hora_inicio = now() - interval '3 days 1 hour', hora_fim = now() - interval '3 days' WHERE id = $1",
-    [antiga],
+    ).linhas as { id: string; conferencia_id?: string }[];
+  expect((await snapshot("conferencia_itens")).map((l) => l.conferencia_id)).not.toContain(
+    encerrada,
   );
-  expect(await itens()).not.toContain(antiga);
-  // O cabeçalho continua (janela de 30 dias) e a conferência aberta traz os itens.
-  const confs = (
-    await db.como(
-      ESTQ_A,
-      async (q) => (await q("SELECT snapshot_sync('conferencias', null, 1000) AS r"))[0].r,
-    )
-  ).linhas.map((l: { id: string }) => l.id) as string[];
-  expect(confs).toContain(antiga);
+  expect((await snapshot("conferencias")).map((l) => l.id)).toContain(encerrada);
   const aberta = randomUUID();
   await enviar(db, ESTQ_A, [evento("CONFERENCE_CREATED", aberta, { unidade_id: LISTA.A })]);
-  expect(await itens()).toContain(aberta);
+  expect((await snapshot("conferencia_itens")).map((l) => l.conferencia_id)).toContain(aberta);
 });
 
 it("totais do histórico: usuário de outra empresa não recalcula conferência alheia", async () => {
@@ -134,4 +123,39 @@ it("totais do histórico: usuário de outra empresa não recalcula conferência 
     [conf],
   );
   expect(h2.p).not.toBe("999");
+});
+
+it("carga inicial e pull de 1.000 itens ficam bem abaixo do statement_timeout (8 s)", async () => {
+  await db.dono(
+    "UPDATE conferencias SET status = 'cancelada', hora_fim = now() WHERE unidade_id = $1 AND status IN ('em_andamento','pausada')",
+    [LISTA.A],
+  );
+  // Histórico com várias conferências (o custo por linha crescia com ele).
+  for (let i = 0; i < 40; i++) {
+    await db.dono(
+      "INSERT INTO conferencias (unidade_id, status, hora_inicio, hora_fim) VALUES ($1, 'cancelada', now() - interval '1 day', now() - interval '1 day')",
+      [LISTA.A],
+    );
+  }
+  await db.dono(
+    `INSERT INTO materiais (unidade_id, codigo, descricao, quantidade_esperada)
+     SELECT $1, 'PERF-' || g, 'Material ' || g, 1 FROM generate_series(1, 1000) g`,
+    [LISTA.A],
+  );
+  const conf = randomUUID();
+  const [cursor] = await db.como(ESTQ_A, async (q) => q("SELECT cursor_sync_inicial() AS c"));
+  await enviar(db, ESTQ_A, [evento("CONFERENCE_CREATED", conf, { unidade_id: LISTA.A })]);
+  const medir = (sql: string, params: unknown[]) =>
+    db.como(ESTQ_A, async (q) => {
+      await q("SET LOCAL statement_timeout = '8s'");
+      const t = Date.now();
+      const [r] = await q(sql, params);
+      return { ms: Date.now() - t, r: r.r };
+    });
+  const snap = await medir("SELECT snapshot_sync('conferencia_itens', null, 500) AS r", []);
+  expect(snap.r.linhas).toHaveLength(500);
+  expect(snap.ms).toBeLessThan(2000);
+  const pull = await medir("SELECT alteracoes_sync($1, 500) AS r", [cursor.c]);
+  expect(pull.r.alteracoes.length).toBeGreaterThan(0);
+  expect(pull.ms).toBeLessThan(2000);
 });

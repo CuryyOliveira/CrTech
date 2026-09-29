@@ -146,6 +146,35 @@ BEGIN
 END;
 $$;
 
+-- Mesmo formato de linha_sync, mas para VÁRIOS registros numa consulta só. As políticas de RLS
+-- (ex.: conferencia_itens → conferencias → pode_unidade) são avaliadas uma vez por consulta, não
+-- uma vez por registro — linha a linha, uma página de 500 itens passava do statement_timeout.
+CREATE OR REPLACE FUNCTION app_private.linhas_sync(_tabela text, _ids uuid[])
+RETURNS TABLE (registro_id uuid, dados jsonb)
+LANGUAGE plpgsql
+STABLE
+SET search_path TO 'public'
+AS $$
+BEGIN
+  CASE _tabela
+    WHEN 'unidades' THEN
+      RETURN QUERY SELECT x.id, to_jsonb(x) FROM public.unidades x WHERE x.id = ANY (_ids);
+    WHEN 'materiais' THEN
+      RETURN QUERY SELECT x.id, to_jsonb(x) - 'imagem_principal' FROM public.materiais x WHERE x.id = ANY (_ids);
+    WHEN 'conferencias' THEN
+      RETURN QUERY SELECT x.id, (to_jsonb(x) - 'assinatura' - 'assinatura_gestor')
+                          || jsonb_build_object('tem_assinatura', x.assinatura IS NOT NULL,
+                                                'tem_assinatura_gestor', x.assinatura_gestor IS NOT NULL)
+                     FROM public.conferencias x WHERE x.id = ANY (_ids);
+    WHEN 'conferencia_itens' THEN
+      RETURN QUERY SELECT x.id, (to_jsonb(x) - 'fotos') || jsonb_build_object('qtd_fotos_v1', jsonb_array_length(x.fotos))
+                     FROM public.conferencia_itens x WHERE x.id = ANY (_ids);
+    WHEN 'conferencia_fotos' THEN
+      RETURN QUERY SELECT x.id, to_jsonb(x) FROM public.conferencia_fotos x WHERE x.id = ANY (_ids);
+  END CASE;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION app_private.ler_cursor(_cursor text, OUT txid xid8, OUT seq bigint)
 LANGUAGE plpgsql
 IMMUTABLE
@@ -188,8 +217,8 @@ BEGIN
   EXECUTE format(
     CASE _tabela
       -- Conferências: abertas e as encerradas nos últimos 30 dias (só o cabeçalho). Itens e fotos:
-      -- só das abertas e das encerradas nas últimas 24 h — o aparelho não usa itens de conferências
-      -- antigas e eles cresceriam sem limite (o histórico é consultado no servidor).
+      -- só das ABERTAS — o aparelho não usa itens de conferências encerradas (a que ele mesmo
+      -- encerrou já está nele; o histórico é consultado no servidor) e eles cresceriam sem limite.
       WHEN 'conferencias' THEN
         'SELECT array_agg(id ORDER BY id) FROM (SELECT id FROM public.conferencias
           WHERE ($1 IS NULL OR id > $1) AND (status IN (''em_andamento'',''pausada'') OR created_at > now() - interval ''30 days'')
@@ -197,19 +226,19 @@ BEGIN
       WHEN 'conferencia_itens' THEN
         'SELECT array_agg(id ORDER BY id) FROM (SELECT i.id FROM public.conferencia_itens i
           JOIN public.conferencias c ON c.id = i.conferencia_id
-          WHERE ($1 IS NULL OR i.id > $1) AND (c.status IN (''em_andamento'',''pausada'') OR coalesce(c.hora_fim, c.created_at) > now() - interval ''1 day'')
+          WHERE ($1 IS NULL OR i.id > $1) AND c.status IN (''em_andamento'',''pausada'')
           ORDER BY i.id LIMIT $2) s'
       WHEN 'conferencia_fotos' THEN
         'SELECT array_agg(id ORDER BY id) FROM (SELECT f.id FROM public.conferencia_fotos f
           JOIN public.conferencias c ON c.id = f.conferencia_id
-          WHERE ($1 IS NULL OR f.id > $1) AND (c.status IN (''em_andamento'',''pausada'') OR coalesce(c.hora_fim, c.created_at) > now() - interval ''1 day'')
+          WHERE ($1 IS NULL OR f.id > $1) AND c.status IN (''em_andamento'',''pausada'')
           ORDER BY f.id LIMIT $2) s'
       ELSE 'SELECT array_agg(id ORDER BY id) FROM (SELECT id FROM public.%1$I WHERE ($1 IS NULL OR id > $1) ORDER BY id LIMIT $2) s'
     END, _tabela)
   INTO v_ids USING _apos, v_limite;
 
-  SELECT coalesce(jsonb_agg(app_private.linha_sync(_tabela, x) ORDER BY x), '[]'::jsonb)
-    INTO v_linhas FROM unnest(coalesce(v_ids, '{}')) x;
+  SELECT coalesce(jsonb_agg(l.dados ORDER BY l.registro_id), '[]'::jsonb)
+    INTO v_linhas FROM app_private.linhas_sync(_tabela, coalesce(v_ids, '{}')) l;
   RETURN jsonb_build_object('linhas', v_linhas,
                             'proximo', CASE WHEN coalesce(array_length(v_ids, 1), 0) = v_limite THEN v_ids[v_limite] END);
 END;
@@ -246,11 +275,22 @@ BEGIN
      WHERE (a.txid, a.seq) > (c.txid, c.seq) AND a.txid < v_xmin
      ORDER BY a.txid, a.seq
      LIMIT v_limite
-  ), unicos AS (
-    SELECT DISTINCT ON (l.tabela, l.registro_id) l.tabela, l.registro_id, l.conferencia_id, l.txid, l.seq,
-           CASE WHEN l.operacao = 'delete' THEN NULL ELSE app_private.linha_sync(l.tabela, l.registro_id) END AS dados
+  ), ultimos AS (
+    SELECT DISTINCT ON (l.tabela, l.registro_id) l.tabela, l.registro_id, l.conferencia_id, l.txid, l.seq, l.operacao
       FROM lote l
      ORDER BY l.tabela, l.registro_id, l.txid DESC, l.seq DESC
+  ), linhas AS (
+    -- Estado atual em lote, uma consulta por tabela (RLS avaliada uma vez por tabela).
+    SELECT t.tabela, d.registro_id, d.dados
+      FROM (SELECT DISTINCT tabela FROM ultimos) t
+     CROSS JOIN LATERAL app_private.linhas_sync(
+             t.tabela,
+             ARRAY(SELECT u.registro_id FROM ultimos u WHERE u.tabela = t.tabela AND u.operacao <> 'delete')) d
+  ), unicos AS (
+    SELECT u.tabela, u.registro_id, u.conferencia_id, u.txid, u.seq,
+           CASE WHEN u.operacao = 'delete' THEN NULL ELSE ln.dados END AS dados
+      FROM ultimos u
+      LEFT JOIN linhas ln ON ln.tabela = u.tabela AND ln.registro_id = u.registro_id
   )
   SELECT (SELECT count(*) FROM lote),
          (SELECT l.txid FROM lote l ORDER BY l.txid DESC, l.seq DESC LIMIT 1),
@@ -295,8 +335,10 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION app_private.linha_sync(text, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION app_private.linhas_sync(text, uuid[]) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION app_private.ler_cursor(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION app_private.linha_sync(text, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION app_private.linhas_sync(text, uuid[]) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION app_private.ler_cursor(text) TO authenticated, service_role;
 REVOKE ALL ON FUNCTION public.cursor_sync_inicial() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.snapshot_sync(text, uuid, integer) FROM PUBLIC, anon;

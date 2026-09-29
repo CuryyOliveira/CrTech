@@ -41,7 +41,32 @@ async function celular(browser: Browser): Promise<BrowserContext> {
 async function abrirLista(page: Page, unidadeId: string) {
   await page.goto(`${APP_V2}/unidade/${unidadeId}`);
   const iniciar = page.getByRole("button", { name: "Iniciar conferência" });
-  await expect(iniciar.or(page.getByTestId("item-atual"))).toBeVisible({ timeout: 60_000 });
+  try {
+    await expect(iniciar.or(page.getByTestId("item-atual"))).toBeVisible({ timeout: 60_000 });
+  } catch (e) {
+    // Diagnóstico: log do próprio motor (IndexedDB) do usuário logado.
+    const logs = await page.evaluate(async () => {
+      const nomes = (await indexedDB.databases())
+        .map((d) => d.name ?? "")
+        .filter((n) => n.startsWith("cr-v2:"));
+      const saida: unknown[] = [];
+      for (const nome of nomes) {
+        const db: IDBDatabase = await new Promise((res) => {
+          const q = indexedDB.open(nome);
+          q.onsuccess = () => res(q.result);
+        });
+        const itens: unknown[] = await new Promise((res) => {
+          const q = db.transaction("logs").objectStore("logs").getAll();
+          q.onsuccess = () => res(q.result);
+        });
+        saida.push({ nome, logs: itens.slice(-15) });
+        db.close();
+      }
+      return saida;
+    });
+    console.log("[diagnostico]", JSON.stringify(logs).slice(0, 4000));
+    throw e;
+  }
   return iniciar;
 }
 

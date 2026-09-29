@@ -72,10 +72,7 @@ async function girar(d: AndroidDevice, rotacao: 0 | 1) {
 
 async function diagnostico(d: AndroidDevice, nome: string) {
   await tela(d, `diag-${nome}`);
-  const log = await sh(
-    d,
-    "logcat -d -t 400 chromium:V cr_:V Capacitor:V AndroidRuntime:E ConferenciaRapida:V *:S",
-  ).catch(() => "");
+  const log = await sh(d, "logcat -d -t 400").catch(() => "");
   writeFileSync(path.join(SAIDA, `diag-${nome}.txt`), log);
   return log.split("\n").slice(-6).join(" | ").slice(0, 600);
 }
@@ -214,9 +211,11 @@ async function main() {
     await sh(d, `am start -W -n ${PKG}/.MainActivity --es cr_url_teste '${APP}/entrar'`);
     await esperar(15_000);
     await tela(d, "01-webview-antigo");
+    // O aviso escreve "cr-navegador-antigo" no console (o Capacitor repassa ao logcat).
+    const log = await sh(d, "logcat -d").catch(() => "");
     await sh(d, "uiautomator dump /sdcard/tela.xml").catch(() => "");
     const xml = await sh(d, "cat /sdcard/tela.xml").catch(() => "");
-    let aviso = /Atualize o navegador do aparelho/.test(xml);
+    let aviso = /cr-navegador-antigo/.test(log) || /Atualize o navegador do aparelho/.test(xml);
     if (!aviso) {
       const wv = await d.webView({ pkg: PKG }, { timeout: 20_000 }).catch(() => null);
       const pg = wv ? await wv.page().catch(() => null) : null;
@@ -304,8 +303,9 @@ async function main() {
     await esperar(300);
     await page.getByRole("button", { name: "CONFIRMAR" }).click();
     await esperar(800);
-    await sh(d, "input keyevent KEYCODE_BACK").catch(() => undefined);
     const p = await texto(page, "progresso");
+    // Fecha o teclado sem usar o "voltar" (que, sem teclado aberto, sairia do app).
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     return { ok: p === `1 / ${LISTA.itens}`, detalhe: p };
   });
 

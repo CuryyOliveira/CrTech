@@ -14,6 +14,7 @@ d.innerHTML='<h1 style="font-size:22px;margin:0 0 12px">Atualize o navegador do 
 +'<p style="margin:0 0 12px">Este aparelho está com uma versão antiga do <b>Android System WebView</b> (ou do Google Chrome), que não consegue abrir o Conferência Rápida corretamente.</p>'
 +'<p style="margin:0 0 20px">Abra a Play Store, procure por <b>Android System WebView</b> e toque em <b>Atualizar</b>. Depois, abra o aplicativo de novo.</p>'
 +'<a href="market://details?id=com.google.android.webview" style="display:inline-block;background:#9a3412;color:#fff;padding:14px 20px;border-radius:8px;text-decoration:none;font-weight:bold">Atualizar pela Play Store</a>';
-(document.body||document.documentElement).appendChild(d);};
+(document.body||document.documentElement).appendChild(d);
+try{console.log("cr-navegador-antigo")}catch(e){}};
 if(document.body)mostrar();else document.addEventListener("DOMContentLoaded",mostrar);
 }catch(e){}})();`;
