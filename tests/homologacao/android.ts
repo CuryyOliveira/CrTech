@@ -567,18 +567,20 @@ async function main() {
   });
   // Ao reabrir, o app carrega a casca local e depois a página: o canal de depuração pode mudar.
   await esperar(1500);
-  try {
-    await reconectar();
-  } catch {
-    // Canal de depuração perdido após a troca casca → página: reabre direto na conferência
-    // (mesmo estado exigido pela próxima etapa: app aberto sem histórico).
-    page = await abrirApp(d, `${APP}/unidade/${LISTA.id}`);
+  // Canal de depuração pode ser perdido na troca casca → página: se reconectar ou calibrar
+  // falhar, reabre direto na conferência (mesmo estado exigido pela próxima etapa: app aberto
+  // sem histórico) e tenta de novo.
+  for (let tentativa = 1; ; tentativa++) {
+    try {
+      if (tentativa === 1) await reconectar();
+      else page = await abrirApp(d, `${APP}/unidade/${LISTA.id}`);
+      await page.getByTestId("item-atual").waitFor({ timeout: 30_000 });
+      await calibrar(d, page);
+      break;
+    } catch (e) {
+      if (tentativa >= 3) throw e;
+    }
   }
-  await page.getByTestId("item-atual").waitFor({ timeout: 30_000 });
-  await calibrar(d, page).catch(async () => {
-    await reconectar();
-    await calibrar(d, page);
-  });
 
   // Sem histórico (app aberto direto na conferência): "voltar" manda o app para segundo plano
   // (moveTaskToBack). Ao voltar ao app, tudo continua lá.
