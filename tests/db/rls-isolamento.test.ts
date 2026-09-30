@@ -147,6 +147,14 @@ describe("SELECT — cada usuário só enxerga a própria empresa", () => {
     expect(r).not.toContain(LISTA.B);
   });
 
+  it("usuário legado sem empresa cria lista (conferência única) na empresa legada", async () => {
+    const r = await db.tentar<{ empresa_id: string }>(
+      LEGADO,
+      "INSERT INTO unidades (tipo, nome) VALUES ('prateleira', 'Conferência única — Estoque Agrícola') RETURNING empresa_id",
+    );
+    expect(r.ok ? r.linhas[0]?.empresa_id : r.erro.message).toBe(EMPRESA_A);
+  });
+
   it("anônimo não vê nada", async () => {
     for (const t of [
       "unidades",
