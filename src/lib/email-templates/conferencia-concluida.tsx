@@ -12,8 +12,21 @@ import {
 } from '@react-email/components'
 import type { TemplateEntry } from './registry'
 
+export interface ItemDivergente {
+  codigo?: string | null
+  descricao?: string | null
+  esperada?: number | null
+  encontrada?: number | null
+}
+
 export interface ConferenciaConcluidaEmailProps {
   nome?: string
+  responsavel?: string
+  lista?: string
+  unidadeLocal?: string
+  status?: string
+  pendentes?: string
+  itensDivergentes?: ItemDivergente[]
   usuario?: string
   conferente?: string
   matricula?: string
@@ -37,6 +50,12 @@ const dash = (valor?: string) => (valor && valor.trim() ? valor : '—')
 
 function ConferenciaConcluidaEmail({
   nome,
+  responsavel,
+  lista,
+  unidadeLocal,
+  status,
+  pendentes,
+  itensDivergentes,
   usuario,
   conferente,
   matricula,
@@ -56,28 +75,34 @@ function ConferenciaConcluidaEmail({
   urlRelatorio,
 }: ConferenciaConcluidaEmailProps) {
   const linhas: Array<[string, string | undefined]> = [
-    ['Conferência', nome],
-    ['Usuário', usuario],
-    ['Frota', frota],
+    ['Status', status || 'Concluída'],
+    ['Responsável', responsavel],
     ['Conferente', conferente],
-    ['Matrícula', matricula],
-    ['Local', local],
-    ['Tipo de conferência', tipoConferencia],
+    ['Lista', lista || nome],
+    ['Unidade/Local', unidadeLocal || local],
+    // Frota somente quando cadastrada.
+    ...(frota && frota.trim() ? ([['Frota', frota]] as Array<[string, string]>) : []),
     ['Início', inicio],
     ['Término', fim],
     ['Tempo total', duracao],
+    ['Usuário', usuario],
+    ['Matrícula', matricula],
+    ['Tipo de conferência', tipoConferencia],
     ['ID da conferência', conferenciaId],
-    ['Status final', 'Concluída'],
   ]
 
   const metricas: Array<[string, string | undefined]> = [
-    ['📦 Total', previstos],
+    ['📦 Quantidade de itens', previstos],
     ['✅ Corretos', contados],
     ['⚠️ Divergências', divergentes],
+    ...(pendentes && pendentes !== '0'
+      ? ([['Não contados', pendentes]] as Array<[string, string]>)
+      : []),
     ['Itens faltantes', faltantes],
     ['Itens em excesso', sobras],
     ['Percentual de acuracidade', percentual],
   ]
+  const divergencias = itensDivergentes ?? []
 
   return (
     <Html lang="pt-BR" dir="ltr">
@@ -110,6 +135,26 @@ function ConferenciaConcluidaEmail({
                 <Text style={value}>{dash(valor)}</Text>
               </Section>
             ))}
+            {divergencias.length ? (
+              <>
+                <Heading as="h2" style={subheading}>
+                  Itens com divergência
+                </Heading>
+                {divergencias.map((d, i) => (
+                  <Section key={`${d.codigo ?? ''}-${i}`} style={row}>
+                    <Text style={label}>
+                      {dash(d.codigo ?? undefined)} — {dash(d.descricao ?? undefined)}
+                    </Text>
+                    <Text style={value}>
+                      Esperada: {d.esperada ?? '—'} · Encontrada: {d.encontrada ?? '—'}
+                      {d.esperada != null && d.encontrada != null
+                        ? ` · Diferença: ${d.encontrada - d.esperada > 0 ? '+' : ''}${d.encontrada - d.esperada}`
+                        : ''}
+                    </Text>
+                  </Section>
+                ))}
+              </>
+            ) : null}
             {urlRelatorio ? (
               <Section style={ctaBlock}>
                 <Button href={urlRelatorio} style={cta}>
@@ -134,6 +179,11 @@ export const template = {
   displayName: 'Conferência concluída',
   previewData: {
     nome: 'Frota 1204 — Caminhão Munck',
+    responsavel: 'Fernando Guedis',
+    lista: 'Frota 1204 — Caminhão Munck',
+    unidadeLocal: 'Alcoeste · Frota de Caminhões',
+    status: 'Concluída',
+    itensDivergentes: [{ codigo: '02779-5', descricao: 'PILHA ENERGIZER D2009', esperada: 11, encontrada: 9 }],
     usuario: 'Lucas Arantes',
     conferente: 'Lucas Arantes',
     matricula: '10425',

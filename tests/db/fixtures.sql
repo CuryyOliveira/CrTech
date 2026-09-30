@@ -94,3 +94,8 @@ INSERT INTO public.sessoes_usuario (user_id, dispositivo) VALUES
 
 INSERT INTO public.planos (codigo, nome, ambiente) VALUES ('basico', 'Básico', 'live');
 INSERT INTO public.configuracoes_sistema (chave, valor) VALUES ('emails_conferencia', '{"destinatarios":["gestor@a.local"]}');
+
+-- A carga acima cria conferências abertas: o banco gera avisos de início (servidor) no COMMIT.
+-- Os testes partem sem esses avisos: executa os triggers adiados agora e remove o que geraram.
+SET CONSTRAINTS ALL IMMEDIATE;
+DELETE FROM public.notificacoes_conferencia WHERE chave IS NOT NULL;

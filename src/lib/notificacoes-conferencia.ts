@@ -93,6 +93,18 @@ export type PayloadNotificacao = {
   sobras?: number | null;
   percentual?: number | null;
   unidade_nome?: string | null;
+  /** Relatório montado pelo servidor (notificações de início/conclusão desde a V2). */
+  responsavel?: string | null;
+  lista?: string | null;
+  modulo_nome?: string | null;
+  empresa_nome?: string | null;
+  setor?: string | null;
+  frota?: string | null;
+  placa?: string | null;
+  modelo?: string | null;
+  pendentes?: number | null;
+  status?: string | null;
+  origem?: string | null;
   divergencias?: DivergenciaItem[];
   erro?: string | null;
   stack?: string | null;
@@ -361,19 +373,21 @@ export function conteudoNotificacao(n: NotificacaoConferenciaRow): {
       assunto: info.assunto,
       intro: "Uma conferência foi finalizada.",
       linhas: [
-        ...base,
-        { rotulo: "Local", valor: v(n.local) },
-        { rotulo: "Tipo de conferência", valor: v(n.tipo_conferencia) },
+        { rotulo: "Status", valor: "Concluída" },
+        ...relatorioBase(n, p),
         { rotulo: "Início", valor: v(p.inicio) },
-        { rotulo: "Fim", valor: v(p.fim) },
+        { rotulo: "Término", valor: v(p.fim) },
         { rotulo: "Tempo total", valor: v(p.duracao ?? fmtDuracao(p.duracao_segundos)) },
-        { rotulo: "Total", valor: v(p.itens) },
+        { rotulo: "Quantidade de itens", valor: v(p.previstos ?? p.itens) },
         { rotulo: "Corretos", valor: v(p.corretos) },
         { rotulo: "Divergências", valor: v(p.divergentes) },
-        { rotulo: "Status", valor: "Concluída" },
+        ...(p.pendentes ? [{ rotulo: "Não contados", valor: v(p.pendentes) }] : []),
+        { rotulo: "Usuário", valor: v(n.usuario_nome) },
+        { rotulo: "Matrícula", valor: v(n.matricula) },
+        { rotulo: "Tipo de conferência", valor: v(n.tipo_conferencia) },
         { rotulo: "ID da conferência", valor: v(n.conferencia_id) },
       ],
-      divergencias: [],
+      divergencias: p.divergencias ?? [],
     };
   }
 
@@ -433,16 +447,47 @@ export function conteudoNotificacao(n: NotificacaoConferenciaRow): {
     assunto: info.assunto,
     intro: "Uma nova conferência foi iniciada.",
     linhas: [
-      ...base,
-      { rotulo: "Local", valor: v(n.local) },
-      { rotulo: "Tipo de conferência", valor: v(n.tipo_conferencia) },
-      { rotulo: "Data", valor: fmtDataBR(n.data) },
-      { rotulo: "Hora", valor: v(n.hora) },
-      { rotulo: "ID da conferência", valor: v(n.conferencia_id) },
       { rotulo: "Status", valor: "Em andamento" },
+      ...relatorioBase(n, p),
+      { rotulo: "Início", valor: v(p.inicio ?? `${fmtDataBR(n.data)} ${v(n.hora)}`) },
+      { rotulo: "Término", valor: "Em andamento" },
+      { rotulo: "Tempo total", valor: "Em andamento" },
+      { rotulo: "Quantidade de itens", valor: v(p.previstos ?? p.itens) },
+      { rotulo: "Divergências", valor: v(p.divergentes ?? 0) },
+      { rotulo: "Usuário", valor: v(n.usuario_nome) },
+      { rotulo: "Matrícula", valor: v(n.matricula) },
+      { rotulo: "Tipo de conferência", valor: v(n.tipo_conferencia) },
+      { rotulo: "ID da conferência", valor: v(n.conferencia_id) },
     ],
     divergencias: [],
   };
+}
+
+/** Unidade/local da lista: empresa, módulo e setor cadastrados. */
+export function unidadeLocal(n: Pick<NotificacaoConferenciaRow, "local">, p: PayloadNotificacao) {
+  const partes = [p.empresa_nome, p.modulo_nome, p.setor].filter((x) => x && String(x).trim());
+  return partes.length ? partes.join(" · ") : (n.local ?? null);
+}
+
+/** Frota da lista, somente quando cadastrada (com placa e modelo, se houver). */
+export function frotaCadastrada(n: Pick<NotificacaoConferenciaRow, "frota">, p: PayloadNotificacao) {
+  const frota = p.frota ?? n.frota;
+  const partes = [frota, p.placa ? `placa ${p.placa}` : null, p.modelo].filter(
+    (x) => x && String(x).trim(),
+  );
+  return partes.length ? partes.join(" · ") : null;
+}
+
+/** Identificação comum de início e conclusão: responsável, conferente, lista, local e frota. */
+function relatorioBase(n: NotificacaoConferenciaRow, p: PayloadNotificacao): LinhaEmail[] {
+  const frota = frotaCadastrada(n, p);
+  return [
+    { rotulo: "Responsável", valor: v(p.responsavel) },
+    { rotulo: "Conferente", valor: v(p.conferente) },
+    { rotulo: "Lista", valor: v(p.lista ?? p.unidade_nome ?? n.local) },
+    { rotulo: "Unidade/Local", valor: v(unidadeLocal(n, p)) },
+    ...(frota ? [{ rotulo: "Frota", valor: frota }] : []),
+  ];
 }
 
 /** Resumo curto usado na lista (caixa de entrada) do painel. */

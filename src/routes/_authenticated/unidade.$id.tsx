@@ -64,12 +64,7 @@ import { usePermissoes } from "@/hooks/usePermissoes";
 import { moduloPorTipo } from "@/lib/permissions";
 import { FAMILIA_POR_TIPO, type TipoModulo } from "@/lib/modulos";
 import { abrirHistorico, contextoUsuario, fecharHistorico, registrarAuditoria } from "@/lib/audit";
-import {
-  registrarConclusaoConferencia,
-  registrarDivergencias,
-  registrarErroConferencia,
-  registrarInicioConferencia,
-} from "@/lib/notificacoes-inicio";
+import { registrarErroConferencia } from "@/lib/notificacoes-inicio";
 import { fmtDuracao } from "@/lib/notificacoes-conferencia";
 import { tempoEmPausa, tempoTrabalhado } from "@/lib/gerencial";
 import { CONFERENCIA_V2_ATIVA } from "@/lib/conferencia-v2/flag";
@@ -459,11 +454,7 @@ function UnidadeDetalhe({ modoV2 }: { modoV2?: ModoV2 } = {}) {
         modulo: moduloPorTipo(unidade?.tipo)?.id ?? null,
         lista: unidade?.nome ?? null,
       });
-      void registrarInicioConferencia({
-        ...ctxNotificacao(conf.id),
-        matricula: unidade?.matricula ?? startForm.codigo ?? null,
-        tipoConferencia: conf.tipo ?? unidade?.tipo ?? null,
-      });
+      // O aviso de início é enviado pelo servidor ao confirmar a conferência.
       toast.success("Conferência iniciada");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -603,50 +594,8 @@ function UnidadeDetalhe({ modoV2 }: { modoV2?: ModoV2 } = {}) {
         modulo: moduloPorTipo(unidade?.tipo)?.id ?? null,
         lista: unidade?.nome ?? null,
       });
-      const fim = new Date();
-      // Tempo líquido: soma dos períodos ativos, calculado e persistido no banco.
-      const segundos = segundosLiquidos;
-
-      const ctx = ctxNotificacao(ativa!.id);
-      const contados = itens.filter((i) => i.quantidade_contada != null).length;
-      const faltantes = itens.filter(
-        (i) =>
-          i.quantidade_contada != null &&
-          Number(i.quantidade_contada) < Number(i.quantidade_esperada),
-      ).length;
-      const sobras = itens.filter(
-        (i) =>
-          i.quantidade_contada != null &&
-          Number(i.quantidade_contada) > Number(i.quantidade_esperada),
-      ).length;
-      void registrarConclusaoConferencia(ctx, {
-        inicio: fmtDateTime(ativa!.hora_inicio),
-        fim: fmtDateTime(agoraLocalISO(fim)),
-        duracaoSegundos: segundos,
-        duracao: fmtDuracao(segundos),
-        itens: resumo.conferidos + resumo.diverg,
-        corretos: resumo.conferidos,
-        divergentes: resumo.diverg,
-        previstos: resumo.total,
-        contados,
-        faltantes,
-        sobras,
-        percentual: resumo.total
-          ? Math.round((resumo.conferidos / resumo.total) * 1000) / 10
-          : 0,
-      });
-
-      void registrarDivergencias(
-        ctx,
-        itens
-          .filter((i) => i.status === "divergencia")
-          .map((i) => ({
-            codigo: i.codigo ?? null,
-            descricao: i.descricao ?? null,
-            esperada: Number(i.quantidade_esperada),
-            encontrada: i.quantidade_contada == null ? null : Number(i.quantidade_contada),
-          })),
-      );
+      // O aviso de conclusão (com o relatório) é enviado pelo servidor ao confirmar a
+      // finalização no banco — mesmo que o aplicativo seja fechado logo em seguida.
       toast.success("Conferência finalizada e bloqueada");
     },
     onError: (e: Error) => notificarErro(e, "Finalizar conferência"),

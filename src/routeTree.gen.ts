@@ -47,6 +47,7 @@ import { Route as AuthenticatedMasterEmpresasRouteImport } from './routes/_authe
 import { Route as AuthenticatedMasterRestaurarRouteImport } from './routes/_authenticated/master.restaurar'
 import { Route as AuthenticatedUnidadeIdRouteImport } from './routes/_authenticated/unidade.$id'
 import { Route as ApiPublicHooksMonitorConferenciasRouteImport } from './routes/api/public/hooks/monitor-conferencias'
+import { Route as ApiPublicHooksNotificacoesRouteImport } from './routes/api/public/hooks/notificacoes'
 import { Route as ApiPublicPaymentsMercadopagoRouteImport } from './routes/api/public/payments/mercadopago'
 
 const IndexRoute = IndexRouteImport.update({
@@ -251,6 +252,12 @@ const ApiPublicHooksMonitorConferenciasRoute =
     path: '/api/public/hooks/monitor-conferencias',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksNotificacoesRoute =
+  ApiPublicHooksNotificacoesRouteImport.update({
+    id: '/api/public/hooks/notificacoes',
+    path: '/api/public/hooks/notificacoes',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicPaymentsMercadopagoRoute =
   ApiPublicPaymentsMercadopagoRouteImport.update({
     id: '/api/public/payments/mercadopago',
@@ -296,6 +303,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/master/': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
+  '/api/public/hooks/notificacoes': typeof ApiPublicHooksNotificacoesRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
 }
 export interface FileRoutesByTo {
@@ -334,6 +342,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/master': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
+  '/api/public/hooks/notificacoes': typeof ApiPublicHooksNotificacoesRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
 }
 export interface FileRoutesById {
@@ -376,6 +385,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/master/': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
+  '/api/public/hooks/notificacoes': typeof ApiPublicHooksNotificacoesRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
 }
 export interface FileRouteTypes {
@@ -418,6 +428,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/master/'
     | '/api/public/hooks/monitor-conferencias'
+    | '/api/public/hooks/notificacoes'
     | '/api/public/payments/mercadopago'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -456,6 +467,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/master'
     | '/api/public/hooks/monitor-conferencias'
+    | '/api/public/hooks/notificacoes'
     | '/api/public/payments/mercadopago'
   id:
     | '__root__'
@@ -497,6 +509,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/'
     | '/_authenticated/master/'
     | '/api/public/hooks/monitor-conferencias'
+    | '/api/public/hooks/notificacoes'
     | '/api/public/payments/mercadopago'
   fileRoutesById: FileRoutesById
 }
@@ -515,6 +528,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermosRoute: typeof TermosRoute
   ApiPublicHooksMonitorConferenciasRoute: typeof ApiPublicHooksMonitorConferenciasRoute
+  ApiPublicHooksNotificacoesRoute: typeof ApiPublicHooksNotificacoesRoute
   ApiPublicPaymentsMercadopagoRoute: typeof ApiPublicPaymentsMercadopagoRoute
 }
 
@@ -786,6 +800,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksMonitorConferenciasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/notificacoes': {
+      id: '/api/public/hooks/notificacoes'
+      path: '/api/public/hooks/notificacoes'
+      fullPath: '/api/public/hooks/notificacoes'
+      preLoaderRoute: typeof ApiPublicHooksNotificacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/payments/mercadopago': {
       id: '/api/public/payments/mercadopago'
       path: '/api/public/payments/mercadopago'
@@ -889,6 +910,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermosRoute: TermosRoute,
   ApiPublicHooksMonitorConferenciasRoute:
     ApiPublicHooksMonitorConferenciasRoute,
+  ApiPublicHooksNotificacoesRoute: ApiPublicHooksNotificacoesRoute,
   ApiPublicPaymentsMercadopagoRoute: ApiPublicPaymentsMercadopagoRoute,
 }
 export const routeTree = rootRouteImport

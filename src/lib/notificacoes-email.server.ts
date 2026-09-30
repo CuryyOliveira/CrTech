@@ -8,7 +8,10 @@ import {
   CONFIG_EMAILS_PADRAO,
   conteudoNotificacao,
   etapasEnvio,
+  fmtDuracao,
+  frotaCadastrada,
   tipoInfo,
+  unidadeLocal,
   type ConfigEmails,
   type NotificacaoConferenciaRow,
 } from "@/lib/notificacoes-conferencia";
@@ -19,8 +22,12 @@ type Resultado = { ok: boolean; status: string; erro: string | null };
 
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return supabaseAdmin as unknown as { from: (t: string) => any };
+  return supabaseAdmin as unknown as {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    from: (t: string) => any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rpc: (n: string, a: Record<string, unknown>) => any;
+  };
 }
 
 async function config(sb: Awaited<ReturnType<typeof admin>>): Promise<ConfigEmails> {
@@ -94,16 +101,22 @@ function modeloDoEvento(
     return {
       nome: "conferencia-concluida",
       dados: {
-        nome: p.unidade_nome ?? n.local ?? n.frota ?? "Conferência",
+        nome: p.lista ?? p.unidade_nome ?? n.local ?? n.frota ?? "Conferência",
+        responsavel: p.responsavel ?? "",
+        lista: p.lista ?? p.unidade_nome ?? n.local ?? "",
+        unidadeLocal: unidadeLocal(n, p) ?? "",
+        status: "Concluída",
         usuario: n.usuario_nome ?? n.usuario_email ?? "",
         conferente: p.conferente ?? "",
         matricula: n.matricula ?? "",
-        frota: n.frota ?? "",
+        frota: frotaCadastrada(n, p) ?? "",
         local: n.local ?? "",
         tipoConferencia: n.tipo_conferencia ?? "",
         inicio: p.inicio ?? "",
         fim: p.fim ?? "",
-        duracao: p.duracao ?? "",
+        duracao: p.duracao ?? (p.duracao_segundos != null ? fmtDuracao(p.duracao_segundos) : ""),
+        pendentes: num(p.pendentes),
+        itensDivergentes: p.divergencias ?? [],
         conferenciaId: n.conferencia_id ?? "",
         previstos: num(p.previstos ?? p.itens),
         contados: num(p.contados ?? p.corretos),
@@ -151,7 +164,6 @@ async function enviarComRetry(
   }
   throw ultimo;
 }
-
 
 /** Envia (ou reenvia) o e-mail de uma notificação e registra cada tentativa. */
 export async function enviarNotificacao(
@@ -223,26 +235,124 @@ export async function enviarNotificacao(
   const { nome: modelo, dados } = modeloDoEvento(n, assunto);
 
   let falhou: string | null = null;
+  let emOutroEnvio = false;
   for (const destinatario of destinatarios) {
-    // Chave estável por notificação/destinatário: retentativas não duplicam envio.
+    // Envio automático: cada destinatário é reservado no banco antes de chamar o provedor.
+    // Chamadas repetidas/simultâneas (retry, timeout, agendador) não duplicam o e-mail.
+    // Reenvio manual (Central Administrativa) é intencional e não passa pela reserva.
+    if (!reenvio) {
+      const { data: reservado, error } = await sb.rpc("reservar_envio_email", {
+        _notificacao_id: n.id,
+        _destinatario: destinatario,
+      });
+      if (error) {
+        falhou = `Reserva de envio indisponível: ${error.message}`;
+        continue;
+      }
+      if (reservado !== true) {
+        emOutroEnvio = true; // já enviado ou em envio por outra chamada
+        continue;
+      }
+    }
+    // Chave estável por notificação/destinatário (identificação no provedor).
     const chave = `notif-${n.id}-${destinatario}`;
     try {
       const resultado = await enviarComRetry(modelo, destinatario, dados, chave);
       if (!resultado.sent) {
-        await registrar(destinatario, "falha", "Destinatário bloqueado para recebimento");
-        falhou = "Destinatário bloqueado para recebimento";
+        const erro = "Destinatário bloqueado para recebimento";
+        if (!reenvio) await marcarEnvio(sb, n.id, destinatario, false, erro);
+        await registrar(destinatario, "falha", erro);
+        falhou = erro;
         continue;
       }
+      if (!reenvio) await marcarEnvio(sb, n.id, destinatario, true, null);
       await registrar(destinatario, reenvio ? "reenviado" : "enviado", null);
     } catch (e) {
       const erro = e instanceof Error ? e.message : "Falha desconhecida no envio";
+      if (!reenvio) await marcarEnvio(sb, n.id, destinatario, false, erro);
       falhou = erro;
       await registrar(destinatario, "falha", erro);
     }
   }
-  return concluir(falhou ? "falha" : reenvio ? "reenviado" : "enviado", falhou);
+  if (reenvio) return concluir(falhou ? "falha" : "reenviado", falhou);
+  if (falhou) return concluir("falha", falhou);
+  // Status geral pelo estado real de cada destinatário (inclui envios feitos por outra chamada).
+  if (emOutroEnvio) {
+    const { data: estados } = await sb.rpc("estado_envios_email", { _notificacao_id: n.id });
+    const lista = (estados ?? []) as { destinatario: string; estado: string }[];
+    const enviados = new Set(
+      lista.filter((e) => e.estado === "enviado").map((e) => e.destinatario),
+    );
+    const todos = destinatarios.every((d) => enviados.has(d.trim().toLowerCase()));
+    if (!todos) {
+      const esgotado = lista.some((e) => e.estado === "falha");
+      return concluir(esgotado ? "falha" : "enviando", null);
+    }
+  }
+  return concluir("enviado", null);
 }
 
+async function marcarEnvio(
+  sb: Awaited<ReturnType<typeof admin>>,
+  notificacaoId: string,
+  destinatario: string,
+  enviado: boolean,
+  erro: string | null,
+) {
+  await sb.rpc("concluir_envio_email", {
+    _notificacao_id: notificacaoId,
+    _destinatario: destinatario,
+    _enviado: enviado,
+    _erro: erro,
+  });
+}
+
+/**
+ * Processa uma notificação criada pelo banco (início, conclusão, divergência): atualiza o
+ * relatório com os dados confirmados no servidor, envia o e-mail (sem duplicar) e, para início e
+ * conclusão, o WhatsApp da empresa (também idempotente). Nunca lança erro.
+ */
+export async function processarNotificacaoServidor(notificacaoId: string): Promise<string> {
+  try {
+    const sb = await admin();
+    const { data: notif } = await sb
+      .from("notificacoes_conferencia")
+      .select("id, tipo, conferencia_id, chave, payload")
+      .eq("id", notificacaoId)
+      .maybeSingle();
+    const n = notif as {
+      id: string;
+      tipo: string;
+      conferencia_id: string | null;
+      chave: string | null;
+      payload: Record<string, unknown> | null;
+    } | null;
+    if (!n) return "nao_encontrada";
+    if (n.chave && n.conferencia_id) {
+      const { data: relatorio } = await sb.rpc("relatorio_notificacao", {
+        _conferencia_id: n.conferencia_id,
+      });
+      if (relatorio && typeof relatorio === "object") {
+        await sb
+          .from("notificacoes_conferencia")
+          .update({ payload: { ...(n.payload ?? {}), ...(relatorio as object) } })
+          .eq("id", n.id);
+      }
+    }
+    const r = await enviarNotificacao(n.id);
+    if (n.tipo === "conferencia_iniciada" || n.tipo === "conferencia_concluida") {
+      try {
+        const { enviarWhatsappNotificacao } = await import("@/lib/whatsapp-envio.server");
+        await enviarWhatsappNotificacao(n.id);
+      } catch {
+        /* WhatsApp nunca impede o e-mail */
+      }
+    }
+    return r.status;
+  } catch (e) {
+    return `erro: ${e instanceof Error ? e.message : "desconhecido"}`;
+  }
+}
 
 /** Reenvia todas as notificações com envio pendente ou falho. */
 export async function reenviarFalhas(): Promise<{ total: number; enviadas: number }> {

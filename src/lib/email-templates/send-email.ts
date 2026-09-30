@@ -7,7 +7,8 @@ import { TEMPLATES } from './registry'
 const SITE_NAME = process.env['EMAIL_FROM_NAME'] || 'Conferência Rápida'
 // Domínio remetente autenticado no Brevo (registros DKIM/SPF no DNS).
 const FROM_DOMAIN = process.env['EMAIL_FROM_DOMAIN'] || 'conferenciarapida.com.br'
-const BREVO_URL = 'https://api.brevo.com/v3/smtp/email'
+// BREVO_API_URL só para testes locais (provedor simulado); em produção fica o endereço oficial.
+const BREVO_URL = process.env['BREVO_API_URL'] || 'https://api.brevo.com/v3/smtp/email'
 
 export type SendTemplateEmailResult =
   | { sent: true }

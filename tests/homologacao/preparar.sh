@@ -18,6 +18,12 @@ supabase_local() {
   rm -rf supabase/migrations && mkdir -p supabase/migrations
   cp "$RAIZ"/supabase/migrations/*.sql supabase/migrations/
   $SUPABASE start -x studio,realtime,imgproxy,edge-runtime,logflare,vector,supavisor,postgres-meta,mailpit
+  # Avisos por e-mail disparados pelo banco: nunca chamar o endereço de produção a partir da
+  # homologação (o teste de notificações aponta para o app local quando precisa).
+  local db_url
+  db_url="$($SUPABASE status -o env | tr -d '"' | sed -n 's/^DB_URL=//p')"
+  psql "$db_url" -q -c "UPDATE app_private.config_servidor SET valor = 'http://127.0.0.1:9' WHERE chave = 'app_url'" \
+    -c "SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname IN ('notificacoes-pendentes', 'monitor-conferencias')" >/dev/null
 }
 
 variaveis() {

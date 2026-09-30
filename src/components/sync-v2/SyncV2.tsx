@@ -4,10 +4,9 @@
  * VITE_CONFERENCE_V2=1.
  */
 import { useEffect } from "react";
-import { vigiarNotificacoes } from "@/components/conferencia-v2/notificacoes";
 import { supabase } from "@/integrations/supabase/client";
 import { empresaMemorizada } from "@/lib/offline/contexto";
-import { aoTrocarMotor, encerrarMotor, motorDoUsuario } from "@/lib/sync-v2";
+import { encerrarMotor, motorDoUsuario } from "@/lib/sync-v2";
 import { IndicadorSync } from "./IndicadorSync";
 
 export function SyncV2() {
@@ -23,18 +22,8 @@ export function SyncV2() {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  // Avisos de início/conclusão das conferências feitas na tela V2.
-  useEffect(() => {
-    let parar: (() => void) | null = null;
-    const sair = aoTrocarMotor((m) => {
-      parar?.();
-      parar = m ? vigiarNotificacoes(m) : null;
-    });
-    return () => {
-      sair();
-      parar?.();
-    };
-  }, []);
+  // Avisos de início/conclusão: disparados pelo servidor quando a conferência é confirmada
+  // no banco (migration 20260930120000_notificacoes_servidor.sql), sem depender do aparelho.
 
   return <IndicadorSync />;
 }

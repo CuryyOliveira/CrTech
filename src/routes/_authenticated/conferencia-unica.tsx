@@ -13,7 +13,6 @@ import { useModulos } from "@/hooks/useModulos";
 import { db, normalize, salvarMateriais, type Unidade } from "@/lib/app";
 import { dataLocalISO, agoraLocalISO } from "@/lib/datas";
 import { registrarAuditoria } from "@/lib/audit";
-import { registrarInicioConferencia } from "@/lib/notificacoes-inicio";
 import type { ModuloResolvido } from "@/lib/modulos";
 
 export const Route = createFileRoute("/_authenticated/conferencia-unica")({
@@ -22,7 +21,8 @@ export const Route = createFileRoute("/_authenticated/conferencia-unica")({
       { title: "Conferência Única — Conferência Rápida" },
       {
         name: "description",
-        content: "Abra uma conferência avulsa reunindo itens de um ou mais módulos, sem mexer nas conferências em andamento.",
+        content:
+          "Abra uma conferência avulsa reunindo itens de um ou mais módulos, sem mexer nas conferências em andamento.",
       },
       { property: "og:title", content: "Conferência Única — Conferência Rápida" },
       {
@@ -116,12 +116,14 @@ function ConferenciaUnica() {
       const { data: materiaisOrigem, error: eMat } = await consultaMateriais;
       if (eMat) throw eMat;
       const vistos = new Set<string>();
-      const itens = ((materiaisOrigem ?? []) as {
-        codigo: string;
-        descricao: string;
-        locacao: string | null;
-        quantidade_esperada: number;
-      }[])
+      const itens = (
+        (materiaisOrigem ?? []) as {
+          codigo: string;
+          descricao: string;
+          locacao: string | null;
+          quantidade_esperada: number;
+        }[]
+      )
         .filter((m) => {
           const chave = normalize(m.codigo) || normalize(m.descricao);
           if (vistos.has(chave)) return false;
@@ -134,8 +136,7 @@ function ConferenciaUnica() {
           locacao: m.locacao,
           quantidade_esperada: m.quantidade_esperada,
         }));
-      if (!itens.length)
-        throw new Error("Nenhum item encontrado nas listas selecionadas");
+      if (!itens.length) throw new Error("Nenhum item encontrado nas listas selecionadas");
 
       // Substitui a lista anterior da unidade única pelos itens escolhidos agora.
       const { error: eDel } = await db.from("materiais").delete().eq("unidade_id", unidade.id);
@@ -184,14 +185,7 @@ function ConferenciaUnica() {
           modulo: modulo?.chave ?? null,
           lista: r.unidade.nome,
         });
-        void registrarInicioConferencia({
-          conferenciaId: r.conferencia!.id,
-          unidadeId: r.unidade.id,
-          local: r.unidade.nome,
-          frota: null,
-          modulo: modulo?.chave ?? null,
-          tipoConferencia: modulo?.tipoUnidade ?? null,
-        });
+        // O aviso de início é enviado pelo servidor ao confirmar a conferência.
         toast.success("Conferência única iniciada");
       }
       navigate({ to: "/unidade/$id", params: { id: r.unidade.id } });
@@ -215,8 +209,8 @@ function ConferenciaUnica() {
 
       <main className="mx-auto max-w-4xl space-y-6 p-4">
         <p className="text-sm text-muted-foreground">
-          Abra uma conferência avulsa reunindo os itens de um módulo, sem mexer nas
-          conferências em andamento dos cards.
+          Abra uma conferência avulsa reunindo os itens de um módulo, sem mexer nas conferências em
+          andamento dos cards.
         </p>
 
         {/* Etapa 1: módulo */}
