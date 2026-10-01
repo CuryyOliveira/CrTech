@@ -6,7 +6,7 @@
  * Telas que montam o aviso junto de uma operação crítica passam `emOperacao`.
  * Nunca baixa nem instala nada: "Atualizar agora" abre a página oficial no navegador.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +53,14 @@ export function AvisoNovaVersao({
   const motor = motorProp !== undefined ? motorProp : global.motor;
   const [resumo, setResumo] = useState<ResumoSync>(RESUMO_VAZIO);
   const [aviso, setAviso] = useState<Atualizacao | null>(null);
+  // Depois que o usuário respondeu (Atualizar/Depois/fechar), uma verificação que ainda estava
+  // em andamento não reabre o aviso nesta sessão.
+  const respondido = useRef(false);
+  const responder = () => {
+    respondido.current = true;
+    adiarAviso(ambiente);
+    setAviso(null);
+  };
 
   useEffect(() => {
     if (!motor) {
@@ -65,15 +73,19 @@ export function AvisoNovaVersao({
   const seguro = !emOperacao && momentoSeguro(resumo, !!motor);
 
   useEffect(() => {
-    if (!seguro || aviso || !appInstalado(ambiente?.janela)) return;
+    if (!seguro || aviso || respondido.current || !appInstalado(ambiente?.janela)) return;
     let vivo = true;
-    void verificarAtualizacao(ambiente).then((r) => vivo && r && setAviso(r));
+    void verificarAtualizacao(ambiente).then((r) => {
+      if (vivo && r && !respondido.current) setAviso(r);
+    });
     return () => {
       vivo = false;
     };
   }, [seguro, aviso, ambiente]);
 
-  const aberto = !!aviso && seguro;
+  // Uma vez aberto, sincronizações automáticas rápidas não fazem o aviso piscar; só uma
+  // operação na tela (conferência) o esconde.
+  const aberto = !!aviso && !emOperacao;
   if (!aviso) return null;
 
   return (
@@ -81,9 +93,7 @@ export function AvisoNovaVersao({
       open={aberto}
       onOpenChange={(abrir) => {
         // Fechar (Esc/voltar) vale como "Depois": nada de aviso insistente.
-        if (abrir) return;
-        adiarAviso(ambiente);
-        setAviso(null);
+        if (!abrir) responder();
       }}
     >
       <AlertDialogContent
@@ -107,13 +117,7 @@ export function AvisoNovaVersao({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2">
-          <AlertDialogCancel
-            className="h-12"
-            onClick={() => {
-              adiarAviso(ambiente);
-              setAviso(null);
-            }}
-          >
+          <AlertDialogCancel className="h-12" onClick={responder}>
             DEPOIS
           </AlertDialogCancel>
           <AlertDialogAction
@@ -121,8 +125,7 @@ export function AvisoNovaVersao({
             onClick={() => {
               abrirPaginaOficial(aviso.remota.versionName, ambiente);
               // Ao voltar do navegador, não pergunta de novo na mesma hora.
-              adiarAviso(ambiente);
-              setAviso(null);
+              responder();
             }}
           >
             ATUALIZAR AGORA

@@ -169,6 +169,13 @@ test("telas de 320 a 428 px: sem rolagem horizontal, botões visíveis e acessí
       expect(caixa.x + caixa.width).toBeLessThanOrEqual(largura);
     }
     await expect(page.getByRole("alertdialog", { name: "Nova versão disponível" })).toBeVisible();
+    // Espera a animação de abertura terminar (no meio do fade o contraste ainda é parcial).
+    await aviso.evaluate((el) =>
+      Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)),
+    );
+    await page.evaluate(() =>
+      Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))),
+    );
     const r = await new AxeBuilder({ page }).include('[data-testid="aviso-nova-versao"]').analyze();
     expect(r.violations.map((v) => v.id)).toEqual([]);
   }
