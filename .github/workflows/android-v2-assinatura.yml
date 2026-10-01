@@ -155,7 +155,12 @@ jobs:
           for v in ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             [ -n "${!v}" ] || { echo "::error::secret $v ausente"; exit 1; }
           done
-          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/producao.keystore"
+          # Mesmo tratamento do workflow de release: aceita quebras de linha, cabeçalho PEM,
+          # prefixo data:...;base64, base64url (-_) e falta de "=".
+          B64="$(printf '%s' "$KS_B64" | sed -e '/^-----/d' -e 's/^data:[^,]*,//' | tr -d '[:space:]' | tr -- '-_' '+/')"
+          while [ $(( ${#B64} % 4 )) -ne 0 ]; do B64="$B64="; done
+          printf '%s' "$B64" | base64 -d > "$RUNNER_TEMP/producao.keystore" 2>/dev/null \
+            || { echo "::error::ANDROID_KEYSTORE_BASE64 não é um base64 válido"; exit 1; }
           keytool -list -v -keystore "$RUNNER_TEMP/producao.keystore" -storepass:env ANDROID_KEYSTORE_PASSWORD \
             -alias "$ANDROID_KEY_ALIAS" > "$RUNNER_TEMP/info.txt" || { echo "::error::senha do keystore ou alias incorretos"; exit 1; }
           grep -E "Alias name|Owner|Valid|SHA256:|Signature algorithm|Key Algorithm" "$RUNNER_TEMP/info.txt"
