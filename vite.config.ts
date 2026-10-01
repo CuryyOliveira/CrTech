@@ -62,8 +62,7 @@ export default defineConfig(({ command, mode }) => {
         runtimeCaching: [
           {
             // Páginas visitadas ficam disponíveis offline (nunca cache-first).
-            urlPattern: ({ request, url }) =>
-              request.mode === "navigate" && !url.pathname.startsWith("/~oauth"),
+            urlPattern: ({ request }) => request.mode === "navigate",
             handler: "NetworkFirst",
             options: {
               cacheName: "paginas",

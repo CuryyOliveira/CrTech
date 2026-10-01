@@ -8,11 +8,10 @@ O app abre o sistema publicado em `https://conferenciarapida.com.br` diretamente
 nativo (`APP_URL` em `MainActivity.java`), usando a rede do próprio Chromium — sem o proxy
 interno do Capacitor, que não é compatível com a hospedagem do sistema.
 
-> O domínio deve estar na Cloudflare com o registro `A` (185.158.133.1) em **Somente DNS**
-> (nuvem cinza). Com o proxy ligado, a Cloudflare responde "Error 1000" e o site não abre. Assim toda a lógica, telas, autenticação
-(Supabase), funções de servidor (pagamentos, e-mails, WhatsApp, gestão de usuários) e o
-banco de dados continuam exatamente os mesmos da versão web — e cada publicação feita na
-Lovable chega ao app sem precisar gerar um novo APK.
+Assim toda a lógica, telas, autenticação (Supabase), funções de servidor (pagamentos, e-mails,
+WhatsApp, gestão de usuários) e o banco de dados continuam exatamente os mesmos da versão web, e
+cada publicação do sistema (Cloudflare Workers, `.github/workflows/deploy-web.yml`) chega ao app
+sem precisar gerar um novo APK.
 
 As adaptações para o Android ficam em:
 

@@ -8,9 +8,6 @@
     "allowNavigation": [
       "conferenciarapida.com.br",
       "*.conferenciarapida.com.br",
-      "conferenciamat.lovable.app",
-      "oauth.lovable.app",
-      "lovable.dev",
       "*.supabase.co",
       "accounts.google.com",
       "*.mercadopago.com",

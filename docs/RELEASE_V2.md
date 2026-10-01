@@ -64,6 +64,15 @@ Verificação depois das migrations:
 - Ícone novo (Android e site), gerado por `scripts/gerar-icones.py` a partir de
   `assets/icone/original.jpg`. Mesma chave de produção: atualiza por cima da 2.0.0.
 
+### 2.0.2 — remoção dos resíduos da Lovable (aguardando publicação)
+
+- APK: `allowNavigation`, origens do canal nativo (`MainActivity`) e `offline.html` sem domínios da
+  Lovable; `scripts/android/verificar-dominios.sh` recusa um release com Lovable ou endereço local.
+- Site: sem as exceções da Lovable no Service Worker e no retorno do Mercado Pago; removidos
+  `VITE_PAYMENTS_CLIENT_TOKEN`, `*SUPABASE_PROJECT_ID`, `@hookform/resolvers`, `public/sw.js`
+  (o build gera o `sw.js` do Workbox) e os scripts `t*.tmp.mjs`.
+- Mesma chave de produção: atualiza por cima da 2.0.1.
+
 ## Limitações conhecidas
 
 - Android 7/8 continuam verificando a chave anterior (esquema v2); Android 9+ passa a exigir a

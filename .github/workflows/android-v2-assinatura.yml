@@ -190,5 +190,6 @@ jobs:
           UNS="$(ls mobile/android/app/build/outputs/apk/release/*.apk)"
           bash scripts/android/assinar-com-rotacao.sh "$UNS" "$RUNNER_TEMP/teste-producao.apk"
           bash scripts/android/verificar-apk.sh "$RUNNER_TEMP/teste-producao.apk" 999999
+          bash scripts/android/verificar-dominios.sh "$RUNNER_TEMP/teste-producao.apk"
           rm -f "$RUNNER_TEMP/teste-producao.apk" "$RUNNER_TEMP/producao.keystore"
           echo "Chave de produção válida e rotação verificada. Nenhum APK foi publicado."

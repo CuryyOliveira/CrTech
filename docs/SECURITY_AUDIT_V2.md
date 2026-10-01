@@ -36,7 +36,7 @@
 | S-09 | Regras de negócio da conferência só no cliente (qualquer usuário com a chave pública pode chamar o PostgREST diretamente) | MÉDIA |
 | S-10 | IP do usuário obtido de serviço de terceiros (ipify) pelo navegador | BAIXA |
 | S-11 | Logs de console detalhados do cofre offline em produção | BAIXA |
-| S-12 | Resíduos da Lovable (`allowNavigation`, exceções no SW) e scripts `t*.tmp.mjs` versionados | BAIXA |
+| S-12 | Resíduos da Lovable (`allowNavigation`, exceções no SW) e scripts `t*.tmp.mjs` versionados — **resolvido na 2.0.2** | BAIXA |
 | S-13 | Identificação do Master por e-mail fixo no código | BAIXA |
 | S-14 | Server function pública `registrarTentativaLogin` funciona como oráculo de senha, com limite de frequência ineficaz em Workers | ALTA |
 | S-15 | (encontrado na Fase 0) Administrador (nível 4) podia alterar o próprio perfil para `super_admin` pela API direta, obtendo acesso a todas as empresas | CRÍTICA |

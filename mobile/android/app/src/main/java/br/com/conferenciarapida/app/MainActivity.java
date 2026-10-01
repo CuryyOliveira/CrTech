@@ -72,7 +72,7 @@ public class MainActivity extends BridgeActivity {
 
     /** Origens do sistema autorizadas a usar o canal nativo. */
     private static final Set<String> ORIGENS = new HashSet<>(
-        Arrays.asList("https://conferenciarapida.com.br", "https://www.conferenciarapida.com.br", "https://conferenciamat.lovable.app")
+        Arrays.asList("https://conferenciarapida.com.br", "https://www.conferenciarapida.com.br")
     );
 
     private String scriptAdaptacoes;

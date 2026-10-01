@@ -754,18 +754,6 @@ Na opção de conferefencia das caixas, preciso que ao lado do botao NOVO, tenha
 
 No menu interativo após o login, a opção de contagem de estoque, a estrutura deve ser a seguinte: o botão NOVO, deve ter a opção de importar a lista da prateleira, dando a opção de colocar o título dela antes de importar, após importar, será carregado os dados das colunas, descrição, locação, código, QTD. DO SISTEMA, são números e dados que viram pronto, após a importação, a lista deve ser clicável, permitindo iniciar a conferência, com os mesmos botões das outras conferências existem no menu anterior, com o botão iniciar conferência, cancelar conferência, ao clicar em iniciar conferência, deve aparecer um balão solicitando o número do almoxarife e o código, após isso será iniciado a conferência, preciso que a quantidade de sistema fique oculta, ela deverá aparecer juntamente com as divergências somente após finalizar a contagem, a função de digitar a quantidade contada preciso que seja possível alterar após contar, por exemplo, contém fui pro próximo item, achei mais 2 itens referente ao anterior, eu devo ter acesso ao código anterior pra alterar, após finalizar a contagem, deve aparecer um card de confirmação, após a contagem finalizada, ela deve gerar um histórico também, com as mesmas funções da outra contagem, PDF, Excel, e exclusão.
 
-This project was built with [Lovable](https://lovable.dev).
-
-**Live app**: https://conferenciamat.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/7703321e-ea9c-4510-879b-ac651b96a728).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
 ## Development
 
 Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
@@ -782,7 +770,7 @@ npm run dev
 O projeto Android fica em [`mobile/`](mobile/README.md) (Capacitor). O APK é gerado
 automaticamente pelo workflow **APK Android** do GitHub Actions e publicado em *Releases*.
 
-## Publicação (sem Lovable)
+## Publicação
 
 - **Sistema web:** Cloudflare Workers, publicado pelo workflow *Publicar sistema (Cloudflare Workers)*
   (`.github/workflows/deploy-web.yml`) a cada push na `main` ou manualmente em *Actions*.

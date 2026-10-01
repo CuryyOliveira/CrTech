@@ -34,7 +34,7 @@
   <script>
     var params = new URLSearchParams(window.location.search);
     var destino = params.get("url") || "";
-    var APP_URL = /^https:\/\/(([a-z0-9-]+\.)*conferenciarapida\.com\.br|conferenciamat\.lovable\.app)\//.test(destino)
+    var APP_URL = /^https:\/\/([a-z0-9-]+\.)*conferenciarapida\.com\.br\//.test(destino)
       ? destino
       : "https://conferenciarapida.com.br/";
     if (params.get("erro")) document.getElementById("detalhe").textContent = "Detalhe: " + params.get("erro");

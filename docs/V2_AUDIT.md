@@ -415,7 +415,7 @@ O banco registra 5 migrations consolidadas e o repositório tem 70 arquivos. **R
 | P-11 | Fotos e assinaturas como base64 no banco | várias | MÉDIA |
 | P-12 | Relógio do aparelho define datas e conflitos (R-07) | `datas.ts` | MÉDIA |
 | P-13 | Rota nunca visitada não abre offline (SW sem fallback de navegação) | `vite.config.ts` | MÉDIA |
-| P-14 | `public/sw.js` morto; exceções da Lovable em `sw.ts`; `allowNavigation` com domínios da Lovable | | BAIXA |
+| P-14 | `public/sw.js` morto; exceções da Lovable em `sw.ts`; `allowNavigation` com domínios da Lovable — **resolvido na 2.0.2** | | BAIXA |
 | P-15 | Arquivos `t1..t4.tmp.mjs` versionados na raiz (scripts de teste que usam service role por env) | raiz | BAIXA |
 | P-16 | Drift das migrations (§8.5) | `supabase/migrations` | MÉDIA |
 | P-17 | Sem versão semântica do sistema; erro TS pré-existente em `__root.tsx` | | BAIXA |

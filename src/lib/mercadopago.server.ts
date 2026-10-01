@@ -256,15 +256,10 @@ export function validarAssinaturaWebhook(
  * aplicativo — evita redirecionamento para destinos controlados por terceiros.
  *
  * O Mercado Pago valida o `back_url` e recusa (400 invalid_field_content)
- * endereços de pré-visualização (ex.: `id-preview--<id>.lovable.app`) e
- * endereços locais. Por isso apenas os domínios públicos oficiais são aceitos;
+ * endereços de pré-visualização e endereços locais. Por isso apenas os domínios públicos oficiais são aceitos;
  * qualquer outra origem cai no domínio oficial do aplicativo.
  */
-const ORIGENS_RETORNO_PERMITIDAS = [
-  "conferenciarapida.com.br",
-  "www.conferenciarapida.com.br",
-  "conferenciamat.lovable.app",
-];
+const ORIGENS_RETORNO_PERMITIDAS = ["conferenciarapida.com.br", "www.conferenciarapida.com.br"];
 
 export function urlRetornoValida(origem: string): string {
   try {

@@ -117,12 +117,8 @@ jobs:
             "$BT/aapt2" dump badging "$apk" | grep -E "^(package|sdkVersion|targetSdkVersion|native-code|application-label)" || true
           done
           bash "$GITHUB_WORKSPACE/scripts/android/verificar-apk.sh" release/*.apk "$CR_VERSION_CODE"
-          # O release de produção abre somente https://conferenciarapida.com.br (sem endereço local).
-          if unzip -p release/*.apk 'classes*.dex' | grep -aqE 'http://(localhost|127\.0\.0\.1)'; then
-            echo "::error::O APK de release contém endereço local (localhost/127.0.0.1)"; exit 1
-          fi
-          unzip -p release/*.apk 'classes*.dex' | grep -aq 'https://conferenciarapida.com.br/' \
-            || { echo "::error::O APK de release não aponta para https://conferenciarapida.com.br/"; exit 1; }
+          # O release de produção abre somente https://conferenciarapida.com.br (sem localhost e sem Lovable).
+          bash "$GITHUB_WORKSPACE/scripts/android/verificar-dominios.sh" release/*.apk
           mkdir -p "$GITHUB_WORKSPACE/apk"
           cp debug/*.apk release/*.apk "$GITHUB_WORKSPACE/apk/"
           (cd "$GITHUB_WORKSPACE/apk" && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
