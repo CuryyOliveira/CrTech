@@ -24,6 +24,8 @@ export type AdminCategoria = {
   id: "gestao" | "inteligencia" | "controle";
   titulo: string;
   emoji: string;
+  /** Texto curto exibido no grupo (Central e tela do grupo). */
+  descricao: string;
   itens: AdminItem[];
 };
 
@@ -32,6 +34,7 @@ export const ADMIN_CATEGORIAS: AdminCategoria[] = [
     id: "gestao",
     titulo: "Gestão",
     emoji: "👥",
+    descricao: "Usuários, empresa, módulos, setores, planos, avisos e sistema.",
     itens: [
       {
         slug: "usuarios",
@@ -113,6 +116,7 @@ export const ADMIN_CATEGORIAS: AdminCategoria[] = [
     id: "inteligencia",
     titulo: "Inteligência",
     emoji: "📊",
+    descricao: "Painel gerencial, metas, estoque e relatórios.",
     itens: [
       {
         slug: "painel-gerencial",
@@ -144,6 +148,7 @@ export const ADMIN_CATEGORIAS: AdminCategoria[] = [
     id: "controle",
     titulo: "Controle",
     emoji: "🔒",
+    descricao: "Notificações, auditoria, histórico e diagnóstico.",
     itens: [
       {
         slug: "notificacoes",
@@ -184,6 +189,15 @@ export const ADMIN_ITENS: AdminItem[] = ADMIN_CATEGORIAS.flatMap((c) => c.itens)
 
 export function adminItem(slug: string) {
   return ADMIN_ITENS.find((i) => i.slug === slug);
+}
+
+export function adminCategoria(id: string) {
+  return ADMIN_CATEGORIAS.find((c) => c.id === id);
+}
+
+/** Grupo a que um módulo pertence (para a trilha Central → Grupo → Módulo). */
+export function categoriaDoItem(slug: string) {
+  return ADMIN_CATEGORIAS.find((c) => c.itens.some((i) => i.slug === slug));
 }
 
 /** Categorias de configuração da Administração do Sistema (fase estrutural). */

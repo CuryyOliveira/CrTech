@@ -1,20 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  Bell,
-  Boxes,
-  Building2,
-  ClipboardList,
-  FileText,
-  Gauge,
-  History,
-  CreditCard,
-  Settings,
-  ShieldCheck,
-  Target,
-  Users,
-} from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { ADMIN_CATEGORIAS } from "@/lib/admin";
 import { ResumoExecutivo } from "@/components/admin/ResumoExecutivo";
@@ -22,22 +9,6 @@ import { ResumoExecutivo } from "@/components/admin/ResumoExecutivo";
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminHome,
 });
-
-const ICONES = {
-  users: Users,
-  clipboard: ClipboardList,
-  settings: Settings,
-  gauge: Gauge,
-  target: Target,
-  fileText: FileText,
-  bell: Bell,
-  shieldCheck: ShieldCheck,
-  history: History,
-  creditCard: CreditCard,
-  building: Building2,
-  boxes: Boxes,
-
-} as const;
 
 function AdminHome() {
   return (
@@ -47,32 +18,46 @@ function AdminHome() {
       trilha={[{ label: "Central Administrativa" }]}
     >
       <div className="space-y-6">
+        {/* Visão operacional: indicadores, contagens em andamento, alertas, metas e monitor. */}
         <ResumoExecutivo />
-        {ADMIN_CATEGORIAS.map((cat) => (
-          <section key={cat.id} className="space-y-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              {cat.emoji} {cat.titulo}
-            </h3>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {cat.itens.map((item) => {
-                const Icone = ICONES[item.icone];
-                return (
-                  <Link key={item.slug} to="/admin/$secao" params={{ secao: item.slug }}>
-                    <Card className="h-full transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-lg">
-                      <CardContent className="space-y-2 p-5">
-                        <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                          <Icone className="size-5" />
-                        </div>
-                        <p className="font-semibold">{item.titulo}</p>
-                        <p className="text-xs text-muted-foreground">{item.descricao}</p>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+
+        {/* Acesso aos módulos: cada grupo abre a própria tela. */}
+        <section className="space-y-3" aria-labelledby="titulo-modulos">
+          <h3
+            id="titulo-modulos"
+            className="text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            Módulos
+          </h3>
+          <Card className="divide-y overflow-hidden p-0">
+            {ADMIN_CATEGORIAS.map((cat) => (
+              <Link
+                key={cat.id}
+                to="/admin/grupo/$grupo"
+                params={{ grupo: cat.id }}
+                data-testid={`grupo-${cat.id}`}
+                className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
+              >
+                <span
+                  className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xl"
+                  aria-hidden
+                >
+                  {cat.emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold uppercase tracking-wide">{cat.titulo}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {cat.descricao}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {cat.itens.length} {cat.itens.length === 1 ? "módulo" : "módulos"}
+                </span>
+                <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+              </Link>
+            ))}
+          </Card>
+        </section>
       </div>
     </AdminShell>
   );

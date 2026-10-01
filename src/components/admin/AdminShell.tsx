@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Crown, Search } from "lucide-react";
+import { ArrowLeft, Crown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { usePermissoes } from "@/hooks/usePermissoes";
@@ -23,12 +23,15 @@ export function AdminShell({
   descricao,
   trilha = [],
   acoes,
+  voltar,
   children,
 }: {
   titulo: string;
   descricao?: string;
   trilha?: Trilha[];
   acoes?: ReactNode;
+  /** Botão "← Voltar" acima do título (telas de grupo da Central). */
+  voltar?: { to: string; label: string };
   children: ReactNode;
 }) {
   const { perfil, nome } = usePermissoes();
@@ -84,6 +87,14 @@ export function AdminShell({
             ))}
           </BreadcrumbList>
         </Breadcrumb>
+
+        {voltar && (
+          <Button variant="ghost" size="sm" className="-ml-2 h-11" asChild>
+            <Link to={voltar.to}>
+              <ArrowLeft className="size-4" aria-hidden /> {voltar.label}
+            </Link>
+          </Button>
+        )}
 
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>

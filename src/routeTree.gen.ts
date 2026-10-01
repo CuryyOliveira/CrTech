@@ -47,6 +47,7 @@ import { Route as AuthenticatedMasterEmpresasRouteImport } from './routes/_authe
 import { Route as AuthenticatedMasterRestaurarRouteImport } from './routes/_authenticated/master.restaurar'
 import { Route as AuthenticatedUnidadeIdRouteImport } from './routes/_authenticated/unidade.$id'
 import { Route as ApiPublicVersaoAndroidRouteImport } from './routes/api/public/versao-android'
+import { Route as AuthenticatedAdminGrupoGrupoRouteImport } from './routes/_authenticated/admin.grupo.$grupo'
 import { Route as ApiPublicHooksMonitorConferenciasRouteImport } from './routes/api/public/hooks/monitor-conferencias'
 import { Route as ApiPublicHooksNotificacoesRouteImport } from './routes/api/public/hooks/notificacoes'
 import { Route as ApiPublicPaymentsMercadopagoRouteImport } from './routes/api/public/payments/mercadopago'
@@ -252,6 +253,12 @@ const ApiPublicVersaoAndroidRoute = ApiPublicVersaoAndroidRouteImport.update({
   path: '/api/public/versao-android',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminGrupoGrupoRoute =
+  AuthenticatedAdminGrupoGrupoRouteImport.update({
+    id: '/grupo/$grupo',
+    path: '/grupo/$grupo',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const ApiPublicHooksMonitorConferenciasRoute =
   ApiPublicHooksMonitorConferenciasRouteImport.update({
     id: '/api/public/hooks/monitor-conferencias',
@@ -309,6 +316,7 @@ export interface FileRoutesByFullPath {
   '/api/public/versao-android': typeof ApiPublicVersaoAndroidRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/master/': typeof AuthenticatedMasterIndexRoute
+  '/admin/grupo/$grupo': typeof AuthenticatedAdminGrupoGrupoRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
   '/api/public/hooks/notificacoes': typeof ApiPublicHooksNotificacoesRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
@@ -349,6 +357,7 @@ export interface FileRoutesByTo {
   '/api/public/versao-android': typeof ApiPublicVersaoAndroidRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/master': typeof AuthenticatedMasterIndexRoute
+  '/admin/grupo/$grupo': typeof AuthenticatedAdminGrupoGrupoRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
   '/api/public/hooks/notificacoes': typeof ApiPublicHooksNotificacoesRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
@@ -393,6 +402,7 @@ export interface FileRoutesById {
   '/api/public/versao-android': typeof ApiPublicVersaoAndroidRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/master/': typeof AuthenticatedMasterIndexRoute
+  '/_authenticated/admin/grupo/$grupo': typeof AuthenticatedAdminGrupoGrupoRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
   '/api/public/hooks/notificacoes': typeof ApiPublicHooksNotificacoesRoute
   '/api/public/payments/mercadopago': typeof ApiPublicPaymentsMercadopagoRoute
@@ -437,6 +447,7 @@ export interface FileRouteTypes {
     | '/api/public/versao-android'
     | '/admin/'
     | '/master/'
+    | '/admin/grupo/$grupo'
     | '/api/public/hooks/monitor-conferencias'
     | '/api/public/hooks/notificacoes'
     | '/api/public/payments/mercadopago'
@@ -477,6 +488,7 @@ export interface FileRouteTypes {
     | '/api/public/versao-android'
     | '/admin'
     | '/master'
+    | '/admin/grupo/$grupo'
     | '/api/public/hooks/monitor-conferencias'
     | '/api/public/hooks/notificacoes'
     | '/api/public/payments/mercadopago'
@@ -520,6 +532,7 @@ export interface FileRouteTypes {
     | '/api/public/versao-android'
     | '/_authenticated/admin/'
     | '/_authenticated/master/'
+    | '/_authenticated/admin/grupo/$grupo'
     | '/api/public/hooks/monitor-conferencias'
     | '/api/public/hooks/notificacoes'
     | '/api/public/payments/mercadopago'
@@ -813,6 +826,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicVersaoAndroidRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/grupo/$grupo': {
+      id: '/_authenticated/admin/grupo/$grupo'
+      path: '/grupo/$grupo'
+      fullPath: '/admin/grupo/$grupo'
+      preLoaderRoute: typeof AuthenticatedAdminGrupoGrupoRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/api/public/hooks/monitor-conferencias': {
       id: '/api/public/hooks/monitor-conferencias'
       path: '/api/public/hooks/monitor-conferencias'
@@ -840,11 +860,13 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminSecaoRoute: typeof AuthenticatedAdminSecaoRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+  AuthenticatedAdminGrupoGrupoRoute: typeof AuthenticatedAdminGrupoGrupoRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminSecaoRoute: AuthenticatedAdminSecaoRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+  AuthenticatedAdminGrupoGrupoRoute: AuthenticatedAdminGrupoGrupoRoute,
 }
 
 const AuthenticatedAdminRouteWithChildren =

@@ -24,9 +24,7 @@ import { Assinaturas } from "@/components/admin/Assinaturas";
 import { MinhaEmpresa } from "@/components/admin/MinhaEmpresa";
 import { StatusPagamentos } from "@/components/admin/StatusPagamentos";
 
-
-
-import { adminItem } from "@/lib/admin";
+import { adminItem, categoriaDoItem } from "@/lib/admin";
 
 export const Route = createFileRoute("/_authenticated/admin/$secao")({
   component: Secao,
@@ -35,6 +33,7 @@ export const Route = createFileRoute("/_authenticated/admin/$secao")({
 function Secao() {
   const { secao } = Route.useParams();
   const item = adminItem(secao);
+  const grupo = categoriaDoItem(secao);
 
   if (!item) {
     return (
@@ -56,7 +55,14 @@ function Secao() {
     <AdminShell
       titulo={item.titulo}
       descricao={item.descricao}
-      trilha={[{ label: "Central Administrativa", to: "/admin" }, { label: item.titulo }]}
+      trilha={[
+        { label: "Central Administrativa", to: "/admin" },
+        ...(grupo ? [{ label: grupo.titulo, to: `/admin/grupo/${grupo.id}` }] : []),
+        { label: item.titulo },
+      ]}
+      voltar={
+        grupo ? { to: `/admin/grupo/${grupo.id}`, label: `Voltar para ${grupo.titulo}` } : undefined
+      }
     >
       {secao === "sincronizacao" ? (
         <SincronizacaoManual />
@@ -80,7 +86,6 @@ function Secao() {
         <MinhaEmpresa />
       ) : secao === "assinaturas" ? (
         <Assinaturas />
-
       ) : secao === "status-pagamentos" ? (
         <StatusPagamentos />
       ) : secao === "sistema" ? (
@@ -91,7 +96,6 @@ function Secao() {
         <Diagnostico />
       ) : secao === "auditoria" ? (
         <LogAuditoria />
-
       ) : secao === "estoque" ? (
         <EstoqueModulo />
       ) : secao === "relatorios" ? (
