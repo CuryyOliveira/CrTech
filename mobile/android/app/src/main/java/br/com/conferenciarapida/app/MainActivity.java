@@ -89,7 +89,9 @@ public class MainActivity extends BridgeActivity {
         if (bridge == null) return;
 
         WebView webView = bridge.getWebView();
-        scriptAdaptacoes = lerAsset("cr-android.js");
+        // Versão instalada (aviso de nova versão) + adaptações; injetado só nas origens do sistema.
+        String adaptacoes = lerAsset("cr-android.js");
+        scriptAdaptacoes = Atualizacao.scriptVersao(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE) + (adaptacoes == null ? "" : adaptacoes);
 
         registrarLaunchers();
         configurarCanalNativo(webView);
@@ -207,6 +209,10 @@ public class MainActivity extends BridgeActivity {
                     break;
                 case "externo":
                     abrirExterno(msg.getString("url"));
+                    break;
+                case "atualizacao":
+                    // Nova versão: o endereço é montado aqui (repositório oficial); só a versão vem do site.
+                    abrirExterno(Atualizacao.urlDaRelease(msg.optString("versao")));
                     break;
                 case "erro":
                     aviso(msg.optString("mensagem", "Ocorreu um erro."));

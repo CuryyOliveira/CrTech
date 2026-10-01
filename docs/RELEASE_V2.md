@@ -73,6 +73,16 @@ Verificação depois das migrations:
   (o build gera o `sw.js` do Workbox) e os scripts `t*.tmp.mjs`.
 - Mesma chave de produção: atualiza por cima da 2.0.1.
 
+### 2.0.3 — aviso de nova versão (aguardando publicação)
+
+- O app informa a versão instalada ao site (só no domínio oficial). Na tela inicial, fora de
+  conferência e sem sincronização/pendências, o site consulta `/api/public/versao-android`
+  (no máximo a cada 12 h; GitHub Releases oficial, cache de 1 h) e mostra "Nova versão disponível".
+- "Atualizar agora" abre no navegador somente `https://github.com/CuryyOliveira/CrTech/releases/...`
+  (endereço montado no app a partir de constante). Nada é baixado ou instalado automaticamente.
+- "Depois" (ou fechar) adia por 3 dias. APKs até 2.0.2 são tratados como 2.0.2.
+- Configuração: `CONFIG_ATUALIZACAO` em `src/lib/atualizacao-app/versao.ts`.
+
 ## Limitações conhecidas
 
 - Android 7/8 continuam verificando a chave anterior (esquema v2); Android 9+ passa a exigir a

@@ -12,6 +12,7 @@ import { RESUMO_VAZIO } from "@/lib/sync-v2";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { ConferenceScreen } from "@/components/conferencia-v2/ConferenceScreen";
+import { AvisoNovaVersao } from "@/components/AvisoNovaVersao";
 import { MotorSync } from "@/lib/sync-v2/motor";
 import { encerrada } from "@/lib/sync-v2/projecao";
 import { redeSimulada, TransporteHttp } from "./transporte-http";
@@ -21,6 +22,8 @@ const USUARIO = params.get("usuario") ?? "";
 const LISTA = params.get("lista") ?? "";
 const EMPRESA = params.get("empresa");
 const FAMILIA = params.get("familia") ?? "caminhao";
+// ?aviso=1: monta o aviso de nova versão do APK (como na tela inicial do app).
+const AVISO = params.get("aviso") === "1";
 // Emulador Android: reabrir o app "sem internet" (o sessionStorage some quando o app é fechado).
 if (params.get("offline") === "1") redeSimulada.offline = true;
 if (params.get("offline") === "0") redeSimulada.offline = false;
@@ -69,6 +72,36 @@ function App() {
 
   if (erro) return <p role="alert">{erro}</p>;
   if (!motor || !pronto) return <p>Abrindo…</p>;
+  return (
+    <>
+      {AVISO && <AvisoNovaVersao motor={motor} emOperacao={!!conf} />}
+      <Tela
+        motor={motor}
+        conf={conf}
+        setConf={setConf}
+        saiu={saiu}
+        setSaiu={setSaiu}
+        setErro={setErro}
+      />
+    </>
+  );
+}
+
+function Tela({
+  motor,
+  conf,
+  setConf,
+  saiu,
+  setSaiu,
+  setErro,
+}: {
+  motor: MotorSync;
+  conf: string | null;
+  setConf: (c: string | null) => void;
+  saiu: boolean;
+  setSaiu: (v: boolean) => void;
+  setErro: (e: string) => void;
+}) {
   if (saiu) {
     return (
       <div className="space-y-3 p-6 text-center">

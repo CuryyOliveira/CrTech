@@ -46,6 +46,7 @@ import { Route as AuthenticatedMasterAuditoriaRouteImport } from './routes/_auth
 import { Route as AuthenticatedMasterEmpresasRouteImport } from './routes/_authenticated/master.empresas'
 import { Route as AuthenticatedMasterRestaurarRouteImport } from './routes/_authenticated/master.restaurar'
 import { Route as AuthenticatedUnidadeIdRouteImport } from './routes/_authenticated/unidade.$id'
+import { Route as ApiPublicVersaoAndroidRouteImport } from './routes/api/public/versao-android'
 import { Route as ApiPublicHooksMonitorConferenciasRouteImport } from './routes/api/public/hooks/monitor-conferencias'
 import { Route as ApiPublicHooksNotificacoesRouteImport } from './routes/api/public/hooks/notificacoes'
 import { Route as ApiPublicPaymentsMercadopagoRouteImport } from './routes/api/public/payments/mercadopago'
@@ -246,6 +247,11 @@ const AuthenticatedUnidadeIdRoute = AuthenticatedUnidadeIdRouteImport.update({
   path: '/unidade/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicVersaoAndroidRoute = ApiPublicVersaoAndroidRouteImport.update({
+  id: '/api/public/versao-android',
+  path: '/api/public/versao-android',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksMonitorConferenciasRoute =
   ApiPublicHooksMonitorConferenciasRouteImport.update({
     id: '/api/public/hooks/monitor-conferencias',
@@ -300,6 +306,7 @@ export interface FileRoutesByFullPath {
   '/master/empresas': typeof AuthenticatedMasterEmpresasRoute
   '/master/restaurar': typeof AuthenticatedMasterRestaurarRoute
   '/unidade/$id': typeof AuthenticatedUnidadeIdRoute
+  '/api/public/versao-android': typeof ApiPublicVersaoAndroidRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/master/': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
@@ -339,6 +346,7 @@ export interface FileRoutesByTo {
   '/master/empresas': typeof AuthenticatedMasterEmpresasRoute
   '/master/restaurar': typeof AuthenticatedMasterRestaurarRoute
   '/unidade/$id': typeof AuthenticatedUnidadeIdRoute
+  '/api/public/versao-android': typeof ApiPublicVersaoAndroidRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/master': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
@@ -382,6 +390,7 @@ export interface FileRoutesById {
   '/_authenticated/master/empresas': typeof AuthenticatedMasterEmpresasRoute
   '/_authenticated/master/restaurar': typeof AuthenticatedMasterRestaurarRoute
   '/_authenticated/unidade/$id': typeof AuthenticatedUnidadeIdRoute
+  '/api/public/versao-android': typeof ApiPublicVersaoAndroidRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/master/': typeof AuthenticatedMasterIndexRoute
   '/api/public/hooks/monitor-conferencias': typeof ApiPublicHooksMonitorConferenciasRoute
@@ -425,6 +434,7 @@ export interface FileRouteTypes {
     | '/master/empresas'
     | '/master/restaurar'
     | '/unidade/$id'
+    | '/api/public/versao-android'
     | '/admin/'
     | '/master/'
     | '/api/public/hooks/monitor-conferencias'
@@ -464,6 +474,7 @@ export interface FileRouteTypes {
     | '/master/empresas'
     | '/master/restaurar'
     | '/unidade/$id'
+    | '/api/public/versao-android'
     | '/admin'
     | '/master'
     | '/api/public/hooks/monitor-conferencias'
@@ -506,6 +517,7 @@ export interface FileRouteTypes {
     | '/_authenticated/master/empresas'
     | '/_authenticated/master/restaurar'
     | '/_authenticated/unidade/$id'
+    | '/api/public/versao-android'
     | '/_authenticated/admin/'
     | '/_authenticated/master/'
     | '/api/public/hooks/monitor-conferencias'
@@ -527,6 +539,7 @@ export interface RootRouteChildren {
   ReembolsoRoute: typeof ReembolsoRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermosRoute: typeof TermosRoute
+  ApiPublicVersaoAndroidRoute: typeof ApiPublicVersaoAndroidRoute
   ApiPublicHooksMonitorConferenciasRoute: typeof ApiPublicHooksMonitorConferenciasRoute
   ApiPublicHooksNotificacoesRoute: typeof ApiPublicHooksNotificacoesRoute
   ApiPublicPaymentsMercadopagoRoute: typeof ApiPublicPaymentsMercadopagoRoute
@@ -793,6 +806,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUnidadeIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/versao-android': {
+      id: '/api/public/versao-android'
+      path: '/api/public/versao-android'
+      fullPath: '/api/public/versao-android'
+      preLoaderRoute: typeof ApiPublicVersaoAndroidRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/monitor-conferencias': {
       id: '/api/public/hooks/monitor-conferencias'
       path: '/api/public/hooks/monitor-conferencias'
@@ -908,6 +928,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReembolsoRoute: ReembolsoRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermosRoute: TermosRoute,
+  ApiPublicVersaoAndroidRoute: ApiPublicVersaoAndroidRoute,
   ApiPublicHooksMonitorConferenciasRoute:
     ApiPublicHooksMonitorConferenciasRoute,
   ApiPublicHooksNotificacoesRoute: ApiPublicHooksNotificacoesRoute,

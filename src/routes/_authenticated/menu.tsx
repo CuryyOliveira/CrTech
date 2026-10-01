@@ -16,6 +16,7 @@ import { useMaster } from "@/hooks/useMaster";
 import { PERFIL_LABEL } from "@/lib/permissions";
 import { limparContextoUsuario, registrarAuditoria } from "@/lib/audit";
 import { AvisosMural } from "@/components/AvisosMural";
+import { AvisoNovaVersao } from "@/components/AvisoNovaVersao";
 import { encerrarSessaoLocal, useSessaoAtiva } from "@/hooks/useSessao";
 import { useOffline } from "@/hooks/useOffline";
 
@@ -81,6 +82,7 @@ function Menu() {
 
       <main className="mx-auto max-w-4xl space-y-4 p-4">
         <AvisosMural />
+        <AvisoNovaVersao />
 
         {administrativo && acesso?.empresaNome && (
           <Card>
