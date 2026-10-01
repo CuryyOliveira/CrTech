@@ -17,11 +17,25 @@ test.beforeAll(async () => {
 async function abrirCentral(page: Page) {
   await page.goto(`${APP}/admin`);
   const senha = page.locator('input[type="password"]');
-  if (await senha.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await senha.fill(SENHA);
-    await page.getByRole("button", { name: "Confirmar" }).click();
+  const central = page.getByTestId("grupo-gestao");
+  try {
+    // A confirmação de senha (reautenticação) aparece depois de carregar o perfil.
+    await expect(senha.or(central)).toBeVisible({ timeout: 30_000 });
+    if (await senha.isVisible()) {
+      await senha.fill(SENHA);
+      await page.getByRole("button", { name: "Confirmar" }).click();
+    }
+    await expect(central).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Contagens em andamento")).toBeVisible();
+  } catch (e) {
+    console.log(
+      "TELA ATUAL:",
+      page.url(),
+      "\n",
+      (await page.locator("body").innerText()).slice(0, 1500),
+    );
+    throw e;
   }
-  await expect(page.getByText("Contagens em andamento")).toBeVisible();
 }
 
 async function semRolagemHorizontal(page: Page) {
