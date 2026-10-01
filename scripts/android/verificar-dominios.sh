@@ -10,10 +10,11 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 unzip -q -o "$APK" -d "$TMP"
 
-if cat "$TMP"/classes*.dex | grep -aqE 'http://(localhost|127\.0\.0\.1)'; then
+# grep direto nos arquivos (sem pipe: com pipefail, `cat | grep -q` falha por SIGPIPE).
+if grep -aqE 'http://(localhost|127\.0\.0\.1)' "$TMP"/classes*.dex; then
   echo "::error::O APK de release contém endereço local (localhost/127.0.0.1)"; exit 1
 fi
-cat "$TMP"/classes*.dex | grep -aq 'https://conferenciarapida.com.br/' \
+grep -aq 'https://conferenciarapida.com.br/' "$TMP"/classes*.dex \
   || { echo "::error::O APK de release não aponta para https://conferenciarapida.com.br/"; exit 1; }
 if grep -rail 'lovable' "$TMP" >/dev/null; then
   echo "::error::O APK contém referência à Lovable:"; grep -rail 'lovable' "$TMP" | sed "s#$TMP/##"; exit 1
