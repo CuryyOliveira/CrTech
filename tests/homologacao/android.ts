@@ -595,6 +595,12 @@ async function main() {
       await sh(d, `monkey -p ${PKG} -c android.intent.category.LAUNCHER 1`);
       await esperar(2500);
       const voltou = (await foco()).includes("MainActivity");
+      // O sistema pode recriar a tela ao voltar (novo WebView): reconecta antes de ler.
+      await reconectar();
+      await page
+        .getByTestId("item-atual")
+        .waitFor({ timeout: 30_000 })
+        .catch(() => undefined);
       const p = await texto(page, "progresso");
       return {
         ok: emSegundoPlano && voltou && p === `3 / ${LISTA.itens}`,
