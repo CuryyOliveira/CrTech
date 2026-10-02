@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Identidade visual do Conferência Rápida (theme-color #ea580c, fundo #fdfcfb). -->
+    <color name="colorPrimary">#EA580C</color>
+    <color name="colorPrimaryDark">#C2410C</color>
+    <color name="colorAccent">#EA580C</color>
+    <color name="appBackground">#FDFCFB</color>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Conferência Rápida</string>
+    <string name="title_activity_main">Conferência Rápida</string>
+    <string name="package_name">br.com.conferenciarapida.app</string>
+    <string name="custom_url_scheme">br.com.conferenciarapida.app</string>
+</resources>
