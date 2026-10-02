@@ -25,3 +25,17 @@ export function ordenarPorLocacao<T extends { locacao?: string | null; codigo?: 
     (a, b) => natCompare(a.locacao, b.locacao) || natCompare(a.codigo, b.codigo),
   );
 }
+
+/**
+ * Fileira (letra) de uma locação de prateleira: "P01 − A01" → "A", "P28 - B05" → "B".
+ * Aceita hífen comum, "−", "–" ou "—". Locações sem fileira ("P28", "P50 - PAREDE",
+ * "PISO EXTERNO") → null.
+ */
+export function fileiraDaLocacao(locacao?: string | null): string | null {
+  const partes = String(locacao ?? "")
+    .toUpperCase()
+    .split(/\s*[-−–—]\s*/);
+  if (partes.length < 2) return null;
+  const m = /^([A-Z])\s*\d+$/.exec(partes[1].trim());
+  return m ? m[1] : null;
+}

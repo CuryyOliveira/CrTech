@@ -69,11 +69,11 @@ jobs:
       - name: App real (V2.1 ligada) apontando para o Supabase local
         run: bash tests/homologacao/preparar.sh app 1 3101
 
-      - name: Central Administrativa no app real (Chromium; login, grupos, módulos e permissões)
+      - name: Central Administrativa e Conferência única por fileira no app real (Chromium)
         if: matrix.api == 34
         run: |
           npx playwright install --with-deps chromium
-          npx playwright test -c tests/homologacao/playwright.config.ts admin-navegacao
+          npx playwright test -c tests/homologacao/playwright.config.ts admin-navegacao conferencia-unica-fileira
 
       - name: APK de debug (URL de teste só em debug)
         working-directory: mobile

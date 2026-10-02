@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ClipboardList, Layers, Play } from "lucide-react";
+import { ArrowLeft, ClipboardList, Layers, Play, Rows3 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { useModulos } from "@/hooks/useModulos";
 import { db, normalize, salvarMateriais, type Unidade } from "@/lib/app";
 import { dataLocalISO, agoraLocalISO } from "@/lib/datas";
 import { registrarAuditoria } from "@/lib/audit";
+import { fileiraDaLocacao } from "@/lib/texto";
 import type { ModuloResolvido } from "@/lib/modulos";
 
 export const Route = createFileRoute("/_authenticated/conferencia-unica")({
@@ -38,6 +39,30 @@ export const Route = createFileRoute("/_authenticated/conferencia-unica")({
 });
 
 type ListaOrigem = Pick<Unidade, "id" | "nome" | "tipo">;
+type MaterialOrigem = {
+  codigo: string;
+  descricao: string;
+  locacao: string | null;
+  quantidade_esperada: number;
+};
+
+/** Materiais das listas, em páginas (o servidor devolve no máximo 1.000 linhas por consulta). */
+async function materiaisDasListas(ids: string[]) {
+  const todos: MaterialOrigem[] = [];
+  const PAGINA = 1000;
+  for (let de = 0; ; de += PAGINA) {
+    const { data, error } = await db
+      .from("materiais")
+      .select("codigo,descricao,locacao,quantidade_esperada")
+      .in("unidade_id", ids)
+      .order("id")
+      .range(de, de + PAGINA - 1);
+    if (error) throw error;
+    const lote = (data ?? []) as MaterialOrigem[];
+    todos.push(...lote);
+    if (lote.length < PAGINA) return todos;
+  }
+}
 
 const NOME_UNIDADE = (modulo: ModuloResolvido) => `Conferência única — ${modulo.titulo}`;
 
@@ -47,6 +72,8 @@ function ConferenciaUnica() {
   const qc = useQueryClient();
   const [modulo, setModulo] = useState<ModuloResolvido | null>(null);
   const [selecionadas, setSelecionadas] = useState<string[]>([]);
+  // Fileiras (letra da locação, ex.: "P01 − A01" → A). Nenhuma marcada = todas.
+  const [fileiras, setFileiras] = useState<string[]>([]);
 
   // Listas (unidades) do módulo escolhido, exceto a unidade da conferência única.
   const { data: listas = [], isLoading: carregandoListas } = useQuery({
@@ -64,10 +91,38 @@ function ConferenciaUnica() {
     },
   });
 
-  const alternar = (id: string) =>
+  const alternar = (id: string) => {
+    setFileiras([]);
     setSelecionadas((atual) =>
       atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id],
     );
+  };
+  const alternarFileira = (letra: string) =>
+    setFileiras((atual) =>
+      atual.includes(letra) ? atual.filter((x) => x !== letra) : [...atual, letra].sort(),
+    );
+
+  // Listas consideradas: as marcadas ou, sem nenhuma marcada, todas do módulo.
+  const idsListas = selecionadas.length ? selecionadas : listas.map((l) => l.id);
+
+  // Fileiras existentes nas locações das listas consideradas (com quantidade de itens).
+  const { data: resumoFileiras } = useQuery({
+    queryKey: ["fileiras-unica", modulo?.chave, [...idsListas].sort().join(",")],
+    enabled: Boolean(modulo) && idsListas.length > 0,
+    queryFn: async () => {
+      const contagem = new Map<string, number>();
+      let semFileira = 0;
+      for (const m of await materiaisDasListas(idsListas)) {
+        const letra = fileiraDaLocacao(m.locacao);
+        if (letra) contagem.set(letra, (contagem.get(letra) ?? 0) + 1);
+        else semFileira++;
+      }
+      return {
+        letras: [...contagem.entries()].sort(([a], [b]) => a.localeCompare(b)),
+        semFileira,
+      };
+    },
+  });
 
   const iniciar = useMutation({
     mutationFn: async () => {
@@ -103,27 +158,13 @@ function ConferenciaUnica() {
         .maybeSingle();
       if (aberta) return { unidade, retomada: true };
 
-      // Reúne os itens das listas escolhidas (sem duplicar códigos).
-      let consultaMateriais = db
-        .from("materiais")
-        .select("codigo,descricao,locacao,quantidade_esperada");
-      consultaMateriais = selecionadas.length
-        ? consultaMateriais.in("unidade_id", selecionadas)
-        : consultaMateriais.in(
-            "unidade_id",
-            listas.map((l) => l.id),
-          );
-      const { data: materiaisOrigem, error: eMat } = await consultaMateriais;
-      if (eMat) throw eMat;
+      // Reúne os itens das listas escolhidas (sem duplicar códigos), só das fileiras marcadas.
+      const filtro = new Set(fileiras);
+      const materiaisOrigem = (await materiaisDasListas(idsListas)).filter(
+        (m) => filtro.size === 0 || filtro.has(fileiraDaLocacao(m.locacao) ?? ""),
+      );
       const vistos = new Set<string>();
-      const itens = (
-        (materiaisOrigem ?? []) as {
-          codigo: string;
-          descricao: string;
-          locacao: string | null;
-          quantidade_esperada: number;
-        }[]
-      )
+      const itens = materiaisOrigem
         .filter((m) => {
           const chave = normalize(m.codigo) || normalize(m.descricao);
           if (vistos.has(chave)) return false;
@@ -136,7 +177,12 @@ function ConferenciaUnica() {
           locacao: m.locacao,
           quantidade_esperada: m.quantidade_esperada,
         }));
-      if (!itens.length) throw new Error("Nenhum item encontrado nas listas selecionadas");
+      if (!itens.length)
+        throw new Error(
+          fileiras.length
+            ? "Nenhum item nas fileiras escolhidas"
+            : "Nenhum item encontrado nas listas selecionadas",
+        );
 
       // Substitui a lista anterior da unidade única pelos itens escolhidos agora.
       const { error: eDel } = await db.from("materiais").delete().eq("unidade_id", unidade.id);
@@ -151,17 +197,32 @@ function ConferenciaUnica() {
           tipo: modulo.tipoUnidade,
           data: dataLocalISO(),
           hora_inicio: agoraLocalISO(),
+          ...(fileiras.length ? { observacoes: `Fileiras: ${fileiras.join(", ")}` } : {}),
         })
         .select()
         .single();
       if (eConf) throw eConf;
-      const { data: materiaisNovos, error: eLer } = await db
-        .from("materiais")
-        .select("*")
-        .eq("unidade_id", unidade.id);
-      if (eLer) throw eLer;
+      // Lê em páginas: a unidade única pode ter mais de 1.000 itens.
+      const materiaisNovos: {
+        id: string;
+        codigo: string;
+        descricao: string;
+        locacao: string | null;
+        quantidade_esperada: number;
+      }[] = [];
+      for (let de = 0; ; de += 1000) {
+        const { data, error: eLer } = await db
+          .from("materiais")
+          .select("id,codigo,descricao,locacao,quantidade_esperada")
+          .eq("unidade_id", unidade.id)
+          .order("id")
+          .range(de, de + 999);
+        if (eLer) throw eLer;
+        materiaisNovos.push(...((data ?? []) as typeof materiaisNovos));
+        if ((data ?? []).length < 1000) break;
+      }
       const { error: eItens } = await db.from("conferencia_itens").insert(
-        (materiaisNovos ?? []).map((m: any) => ({
+        materiaisNovos.map((m) => ({
           conferencia_id: conf.id,
           material_id: m.id,
           codigo: m.codigo,
@@ -181,7 +242,9 @@ function ConferenciaUnica() {
         registrarAuditoria({
           tipo: "operacao",
           acao: "conferencia_unica_iniciada",
-          detalhe: `Conferência única iniciada com ${r.itens} itens`,
+          detalhe: `Conferência única iniciada com ${r.itens} itens${
+            fileiras.length ? ` (fileiras ${fileiras.join(", ")})` : ""
+          }`,
           modulo: modulo?.chave ?? null,
           lista: r.unidade.nome,
         });
@@ -229,6 +292,7 @@ function ConferenciaUnica() {
                   onClick={() => {
                     setModulo(m);
                     setSelecionadas([]);
+                    setFileiras([]);
                   }}
                   className="text-left"
                 >
@@ -290,6 +354,50 @@ function ConferenciaUnica() {
                       ))}
                     </div>
                   </>
+                )}
+                {resumoFileiras && resumoFileiras.letras.length > 0 && (
+                  <div className="space-y-2 border-t pt-3" data-testid="etapa-fileiras">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold">
+                      <Rows3 className="size-4 text-primary" /> 3. Fileira (letra da locação) —
+                      opcional
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Ex.: P01 − <strong>A</strong>01 é a fileira A. Nenhuma marcada = todas as
+                      fileiras.
+                      {resumoFileiras.semFileira > 0 &&
+                        ` ${resumoFileiras.semFileira} ${
+                          resumoFileiras.semFileira === 1
+                            ? "item sem fileira só entra"
+                            : "itens sem fileira só entram"
+                        } sem filtro.`}
+                    </p>
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Fileiras">
+                      {resumoFileiras.letras.map(([letra, qtd]) => {
+                        const ativa = fileiras.includes(letra);
+                        return (
+                          <Button
+                            key={letra}
+                            type="button"
+                            size="sm"
+                            variant={ativa ? "default" : "outline"}
+                            aria-pressed={ativa}
+                            className="h-11 min-w-16 gap-1 text-base font-bold"
+                            data-testid={`fileira-${letra}`}
+                            onClick={() => alternarFileira(letra)}
+                          >
+                            {letra}
+                            <span className="text-xs font-normal opacity-80">({qtd})</span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    {fileiras.length > 0 && (
+                      <p className="text-xs font-medium text-primary">
+                        Conferindo só a{fileiras.length > 1 ? "s fileiras" : " fileira"}{" "}
+                        {fileiras.join(", ")}.
+                      </p>
+                    )}
+                  </div>
                 )}
                 <Button
                   className="w-full gap-2"
