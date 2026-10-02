@@ -34,14 +34,24 @@ jobs:
       - name: Build
         run: npx vite build
 
+      - name: Versão Android oficial no momento do deploy (só versionName/versionCode)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          VERSAO=$(npx vite-node scripts/versao-android-deploy.ts || true)
+          echo "Versão Android conhecida no deploy: ${VERSAO:-nenhuma}"
+          echo "VERSAO_ANDROID_DEPLOY=$VERSAO" >> "$GITHUB_ENV"
+
       - name: Configurar Worker (domínio e variáveis públicas)
         run: |
           set -a; . ./.env; set +a
           jq --arg dominio "$APP_DOMAIN" \
              --arg url "$SUPABASE_URL" \
              --arg key "$SUPABASE_PUBLISHABLE_KEY" \
+             --arg versao "${VERSAO_ANDROID_DEPLOY:-}" \
              '.routes = [{pattern: $dominio, custom_domain: true}]
-              | .vars = {SUPABASE_URL: $url, SUPABASE_PUBLISHABLE_KEY: $key, APP_URL: ("https://" + $dominio)}' \
+              | .vars = {SUPABASE_URL: $url, SUPABASE_PUBLISHABLE_KEY: $key, APP_URL: ("https://" + $dominio),
+                         VERSAO_ANDROID_DEPLOY: $versao}' \
              dist/server/wrangler.json > dist/server/wrangler.tmp.json
           mv dist/server/wrangler.tmp.json dist/server/wrangler.json
           cat dist/server/wrangler.json

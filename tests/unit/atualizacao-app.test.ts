@@ -17,7 +17,12 @@ import {
   verificarAtualizacao,
   type Ambiente,
 } from "@/lib/atualizacao-app/cliente";
-import { limparCacheVersao, versaoAndroidMaisRecente } from "@/lib/atualizacao-app/fonte.server";
+import {
+  limparCacheVersao,
+  versaoAndroidMaisRecente,
+  versaoDoDeploy,
+  type ArmazemVersao,
+} from "@/lib/atualizacao-app/fonte.server";
 import { momentoSeguro } from "@/components/AvisoNovaVersao";
 import { RESUMO_VAZIO } from "@/lib/sync-v2";
 
@@ -189,6 +194,188 @@ describe("fonte: GitHub Releases", () => {
     expect(
       await versaoAndroidMaisRecente({ fetch: lento as unknown as typeof fetch, timeoutMs: 20 }),
     ).toBeNull();
+  });
+
+  describe("última versão conhecida (sobrevive a reinício e a novo deploy)", () => {
+    /** Simula o Cache API da Cloudflare: fica fora da memória do processo. */
+    function armazemFalso(inicial: { valor: unknown; em: number } | null = null) {
+      let guardado = inicial ? JSON.stringify(inicial) : null;
+      const a: ArmazemVersao & { bruto: () => string | null } = {
+        ler: vi.fn(async () => (guardado ? JSON.parse(guardado) : null)),
+        gravar: vi.fn(async (r) => {
+          guardado = JSON.stringify(r);
+        }),
+        bruto: () => guardado,
+      };
+      return a;
+    }
+    const ok = () => vi.fn(async () => Response.json([rel("android-v2.0.3")]));
+    const limite = () =>
+      vi.fn(
+        async () =>
+          new Response('{"message":"API rate limit exceeded"}', {
+            status: 403,
+            headers: { "x-ratelimit-remaining": "0" },
+          }),
+      );
+    const fora = () =>
+      vi.fn(async () => {
+        throw new TypeError("network");
+      });
+    const F = (f: unknown) => f as typeof fetch;
+    const T0 = 1_000_000_000;
+    beforeEach(() => vi.spyOn(console, "warn").mockImplementation(() => undefined));
+
+    it("GitHub normal: devolve a versão e guarda no armazenamento persistente", async () => {
+      const a = armazemFalso();
+      const f = ok();
+      expect(await versaoAndroidMaisRecente({ fetch: F(f), armazem: a, agora: () => T0 })).toEqual(
+        v("2.0.3", 15),
+      );
+      expect(JSON.parse(a.bruto()!)).toEqual({ valor: v("2.0.3", 15), em: T0 });
+    });
+
+    it("reinício/novo deploy (memória zerada): usa o armazenamento sem consultar o GitHub", async () => {
+      const a = armazemFalso();
+      await versaoAndroidMaisRecente({ fetch: F(ok()), armazem: a, agora: () => T0 });
+      limparCacheVersao(); // novo deploy = nova instância, memória vazia
+      const f = ok();
+      expect(
+        await versaoAndroidMaisRecente({ fetch: F(f), armazem: a, agora: () => T0 + 10 * 60_000 }),
+      ).toEqual(v("2.0.3", 15));
+      expect(f).not.toHaveBeenCalled();
+    });
+
+    it("reinício + GitHub indisponível: última versão válida guardada (não 503)", async () => {
+      const a = armazemFalso();
+      await versaoAndroidMaisRecente({ fetch: F(ok()), armazem: a, agora: () => T0 });
+      limparCacheVersao();
+      const f = fora();
+      expect(
+        await versaoAndroidMaisRecente({ fetch: F(f), armazem: a, agora: () => T0 + 5 * 3600_000 }),
+      ).toEqual(v("2.0.3", 15));
+      expect(f).toHaveBeenCalledTimes(1);
+    });
+
+    it("rate limit (403) / erro HTTP: última versão conhecida e não insiste a cada pedido", async () => {
+      const a = armazemFalso({ valor: v("2.0.2", 14), em: T0 - 2 * 3600_000 });
+      for (const f of [limite(), vi.fn(async () => new Response("x", { status: 502 }))]) {
+        limparCacheVersao();
+        let agora = T0;
+        const ops = { fetch: F(f), armazem: a, agora: () => agora, deploy: undefined };
+        expect(await versaoAndroidMaisRecente(ops)).toEqual(v("2.0.2", 14));
+        agora += 5 * 60_000;
+        expect(await versaoAndroidMaisRecente(ops)).toEqual(v("2.0.2", 14));
+        expect(f).toHaveBeenCalledTimes(1); // espera antes de tentar de novo
+        agora += 6 * 60_000;
+        await versaoAndroidMaisRecente(ops);
+        expect(f).toHaveBeenCalledTimes(2);
+      }
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("HTTP 403"));
+    });
+
+    it("deploy novo sem nada guardado + GitHub recusando: versão gravada no deploy", async () => {
+      const deploy = '{"versionName":"2.0.3","versionCode":15}';
+      expect(
+        await versaoAndroidMaisRecente({ fetch: F(limite()), armazem: armazemFalso(), deploy }),
+      ).toEqual(v("2.0.3", 15));
+      // Entre as versões conhecidas, vale a maior.
+      limparCacheVersao();
+      const a = armazemFalso({ valor: v("2.0.2", 14), em: T0 });
+      expect(
+        await versaoAndroidMaisRecente({
+          fetch: F(limite()),
+          armazem: a,
+          deploy,
+          agora: () => T0 + 2 * 3600_000,
+        }),
+      ).toEqual(v("2.0.3", 15));
+    });
+
+    it("sem nenhuma versão válida conhecida: null (o endpoint responde 503 controlado)", async () => {
+      expect(
+        await versaoAndroidMaisRecente({ fetch: F(fora()), armazem: armazemFalso(), deploy: "" }),
+      ).toBeNull();
+      expect(await versaoAndroidMaisRecente({ fetch: F(fora()), armazem: null })).toBeNull();
+    });
+
+    it("valores guardados inválidos, adulterados ou vencidos são ignorados", async () => {
+      for (const valor of [
+        { versionName: "2.0", versionCode: 15 },
+        { versionName: "2.0.3-beta", versionCode: 15 },
+        { versionName: "../../evil", versionCode: 15 },
+        "2.0.3",
+        null,
+      ]) {
+        limparCacheVersao();
+        expect(
+          await versaoAndroidMaisRecente({
+            fetch: F(fora()),
+            armazem: armazemFalso({ valor, em: T0 }),
+            agora: () => T0 + 2 * 3600_000,
+            deploy: '{"versionName":"9.9","versionCode":1}',
+          }),
+        ).toBeNull();
+      }
+      // Guardado há mais de 30 dias: não vale mais.
+      limparCacheVersao();
+      expect(
+        await versaoAndroidMaisRecente({
+          fetch: F(fora()),
+          armazem: armazemFalso({ valor: v("2.0.3", 15), em: T0 }),
+          agora: () => T0 + 31 * 24 * 3600_000,
+          deploy: undefined,
+        }),
+      ).toBeNull();
+      // Campos extras (ex.: URL) nunca passam adiante.
+      limparCacheVersao();
+      const r = await versaoAndroidMaisRecente({
+        fetch: F(fora()),
+        armazem: armazemFalso({
+          valor: { ...v("2.0.3", 15), url: "https://evil.com/app.apk" },
+          em: T0,
+        }),
+        agora: () => T0 + 2 * 3600_000,
+      });
+      expect(r).toEqual(v("2.0.3", 15));
+      expect(Object.keys(r!).sort()).toEqual(["versionCode", "versionName"]);
+    });
+
+    it("pré-release ou versão inválida no GitHub não substituem a última versão válida", async () => {
+      const a = armazemFalso({ valor: v("2.0.3", 15), em: T0 - 2 * 3600_000 });
+      const so = vi.fn(async () =>
+        Response.json([
+          rel("android-v3.0.0", { prerelease: true }),
+          rel("android-v3.0.1", { draft: true }),
+          rel("android-v3.0"),
+        ]),
+      );
+      expect(await versaoAndroidMaisRecente({ fetch: F(so), armazem: a, agora: () => T0 })).toEqual(
+        v("2.0.3", 15),
+      );
+      expect(a.gravar).not.toHaveBeenCalled();
+    });
+
+    it("versão do deploy: só JSON válido com versionName/versionCode", () => {
+      expect(versaoDoDeploy('{"versionName":"2.0.3","versionCode":15}')).toEqual(v("2.0.3", 15));
+      expect(versaoDoDeploy('{"versionName":"2.0.3","versionCode":15,"url":"x"}')).toEqual(
+        v("2.0.3", 15),
+      );
+      for (const x of ["", " ", "nao-json", '{"versionName":"2.0"}', "[]", undefined, 5]) {
+        expect(versaoDoDeploy(x)).toBeNull();
+      }
+    });
+
+    it("versão igual à instalada não gera aviso; superior gera", async () => {
+      const remota = await versaoAndroidMaisRecente({
+        fetch: F(limite()),
+        armazem: armazemFalso({ valor: v("2.0.3", 15), em: T0 }),
+        agora: () => T0 + 2 * 3600_000,
+      });
+      expect(haAtualizacao(v("2.0.3", 15), remota!)).toBe(false);
+      expect(haAtualizacao(v("2.0.4", 16), remota!)).toBe(false);
+      expect(haAtualizacao(v("2.0.2", 14), remota!)).toBe(true);
+    });
   });
 });
 
