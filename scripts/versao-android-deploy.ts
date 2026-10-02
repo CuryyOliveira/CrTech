@@ -1,13 +1,14 @@
 /**
- * Versão Android oficial para a reserva VERSAO_ANDROID_DEPLOY do Worker (só versionName/versionCode).
+ * Versão Android oficial para as reservas do Worker (só versionName/versionCode): a variável
+ * VERSAO_ANDROID_DEPLOY (deploy Web) e o segredo VERSAO_ANDROID_RELEASE (após publicar um APK).
  *
  * Lê no GitHub (no CI, com o GITHUB_TOKEN do próprio workflow) a maior release Android oficial, com
  * as mesmas regras do endpoint (sem draft/prerelease, tag android-vX.Y.Z, versionCode das notas).
  * O token nunca é impresso nem enviado ao Worker.
  *
  * Modos:
- *  - padrão (deploy Web): falha → imprime vazio e sai 0 (o deploy segue; o Worker mantém a reserva
- *    que já tinha);
+ *  - padrão (deploy Web): falha → sai 0 (o deploy segue) e imprime a versão já publicada (--atual),
+ *    validada, para a reserva não ficar vazia; sem ela, imprime vazio;
  *  - --estrito (após publicar um APK): qualquer problema → mensagem clara e saída 1 (workflow
  *    vermelho, nada é gravado). Com --tag, exige que essa release exista, seja oficial e seja a
  *    maior publicada.
@@ -84,13 +85,13 @@ export async function executar(dep: {
     "x-github-api-version": "2022-11-28",
   };
   if (dep.token) headers.authorization = `Bearer ${dep.token}`;
+  let atual: unknown;
   try {
-    let atual: unknown;
-    try {
-      atual = atualBruto ? JSON.parse(atualBruto) : undefined;
-    } catch {
-      atual = undefined; // endpoint indisponível ou resposta inválida: sem comparação
-    }
+    atual = atualBruto ? JSON.parse(atualBruto) : undefined;
+  } catch {
+    atual = undefined; // endpoint indisponível ou resposta inválida: sem comparação
+  }
+  try {
     const resp = await dep.fetch(
       `https://api.github.com/repos/${REPOSITORIO_OFICIAL}/releases?per_page=30`,
       { headers, redirect: "manual", signal: AbortSignal.timeout(15_000) },
@@ -101,7 +102,16 @@ export async function executar(dep: {
     return 0;
   } catch (e) {
     dep.erro(`versao-android-deploy: ${e instanceof Error ? e.message : String(e)}`);
-    return estrito ? 1 : 0;
+    if (estrito) return 1;
+    // Deploy Web: em vez de gravar vazio (perdendo a reserva), mantém a versão já publicada,
+    // validada com as mesmas regras.
+    const publicada = lerVersaoRemota(atual);
+    if (publicada && codigoValido(publicada.versionCode)) {
+      dep.saida(
+        JSON.stringify({ versionName: publicada.versionName, versionCode: publicada.versionCode }),
+      );
+    }
+    return 0;
   }
 }
 

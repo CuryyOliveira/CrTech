@@ -366,6 +366,81 @@ describe("fonte: GitHub Releases", () => {
       }
     });
 
+    it("APK novo gravado no Worker (VERSAO_ANDROID_RELEASE): vale já, mesmo com cache fresco", async () => {
+      // Cache fresco (10 min) com 2.0.3 em memória e no Cache API.
+      const a = armazemFalso();
+      await versaoAndroidMaisRecente({ fetch: F(ok()), armazem: a, agora: () => T0 });
+      const f = ok();
+      const ops = (release: unknown) => ({
+        fetch: F(f),
+        armazem: a,
+        agora: () => T0 + 10 * 60_000,
+        deploy: '{"versionName":"2.0.3","versionCode":15}',
+        release,
+      });
+      // Mesma versão no Worker: segue no cache, sem GitHub.
+      expect(
+        await versaoAndroidMaisRecente(ops('{"versionName":"2.0.3","versionCode":15}')),
+      ).toEqual(v("2.0.3", 15));
+      // Inferior ou inválida no Worker: ignorada.
+      for (const r of ['{"versionName":"2.0.2","versionCode":14}', '{"versionName":"9.9"}', "x"]) {
+        expect(await versaoAndroidMaisRecente(ops(r))).toEqual(v("2.0.3", 15));
+      }
+      // Maior no Worker (2.0.4): vale na hora, sem consultar o GitHub, e substitui o Cache API.
+      expect(
+        await versaoAndroidMaisRecente(ops('{"versionName":"2.0.4","versionCode":16}')),
+      ).toEqual(v("2.0.4", 16));
+      expect(f).not.toHaveBeenCalled();
+      expect(JSON.parse(a.bruto()!).valor).toEqual(v("2.0.4", 16));
+      // Outra instância (memória vazia) também vê 2.0.4 pelo Cache API, mesmo sem o segredo.
+      limparCacheVersao();
+      expect(
+        await versaoAndroidMaisRecente({
+          fetch: F(f),
+          armazem: a,
+          agora: () => T0 + 11 * 60_000,
+          deploy: undefined,
+          release: undefined,
+        }),
+      ).toEqual(v("2.0.4", 16));
+      expect(f).not.toHaveBeenCalled();
+    });
+
+    it("GitHub ainda sem a release nova (ou cache do GitHub atrasado): fica com a maior do Worker", async () => {
+      expect(
+        await versaoAndroidMaisRecente({
+          fetch: F(ok()), // GitHub responde 2.0.3
+          armazem: armazemFalso(),
+          deploy: undefined,
+          release: '{"versionName":"2.0.4","versionCode":16}',
+        }),
+      ).toEqual(v("2.0.4", 16));
+    });
+
+    it("continuidade: só a variável, só o segredo, ou os dois → sempre há reserva", async () => {
+      const casos: [unknown, unknown, ReturnType<typeof v>][] = [
+        ['{"versionName":"2.0.3","versionCode":15}', undefined, v("2.0.3", 15)],
+        [undefined, '{"versionName":"2.0.3","versionCode":15}', v("2.0.3", 15)],
+        ["", '{"versionName":"2.0.4","versionCode":16}', v("2.0.4", 16)],
+        [
+          '{"versionName":"2.0.4","versionCode":16}',
+          '{"versionName":"2.0.3","versionCode":15}',
+          v("2.0.4", 16),
+        ],
+      ];
+      for (const [deploy, release, esperado] of casos) {
+        limparCacheVersao();
+        expect(
+          await versaoAndroidMaisRecente({
+            fetch: F(limite()),
+            armazem: armazemFalso(),
+            deploy,
+            release,
+          }),
+        ).toEqual(esperado);
+      }
+    });
+
     it("versão igual à instalada não gera aviso; superior gera", async () => {
       const remota = await versaoAndroidMaisRecente({
         fetch: F(limite()),

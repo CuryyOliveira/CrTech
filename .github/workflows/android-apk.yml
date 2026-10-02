@@ -171,8 +171,10 @@ jobs:
           gh release create "$TAG" *.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \
             --title "Conferência Rápida – Android ($GITHUB_REF_NAME)" --notes "$NOTAS" --repo "$GITHUB_REPOSITORY"
 
-  # Depois de publicar uma versão FINAL, atualiza só a reserva VERSAO_ANDROID_DEPLOY do Worker de
-  # produção (segredo do Worker: nova versão do Worker com o mesmo código, sem build nem deploy Web).
+  # Depois de publicar uma versão FINAL, grava a versão no segredo VERSAO_ANDROID_RELEASE do Worker de
+  # produção (nova versão do Worker com o mesmo código, sem build nem deploy Web). A variável
+  # VERSAO_ANDROID_DEPLOY (do deploy Web) não é tocada; o endpoint usa a maior das duas e, se ela for
+  # maior que a guardada em cache, passa a valer imediatamente.
   # Usa as mesmas credenciais da Cloudflare do deploy Web; a chave do GitHub não sai do CI.
   versao-no-worker:
     needs: build
@@ -225,17 +227,23 @@ jobs:
           echo "CLOUDFLARE_API_TOKEN=$TOKEN" >> "$GITHUB_ENV"
           if [ -n "$CONTA" ]; then echo "CLOUDFLARE_ACCOUNT_ID=$CONTA" >> "$GITHUB_ENV"; fi
 
-      - name: Atualizar VERSAO_ANDROID_DEPLOY no Worker de produção
+      - name: Gravar a versão no Worker de produção (segredo VERSAO_ANDROID_RELEASE)
         env:
           PAYLOAD: ${{ steps.versao.outputs.payload }}
         run: |
-          printf '%s' "$PAYLOAD" | npx --yes wrangler@4 secret put VERSAO_ANDROID_DEPLOY --name "$WORKER"
+          printf '%s' "$PAYLOAD" | npx --yes wrangler@4 secret put VERSAO_ANDROID_RELEASE --name "$WORKER"
 
-      - name: Conferir o endpoint de produção (informativo)
+      - name: Conferir o endpoint de produção
         env:
           PAYLOAD: ${{ steps.versao.outputs.payload }}
         run: |
-          # O endpoint prefere a consulta ao GitHub e o cache de 1 h; a reserva nova vale quando eles
-          # falham ou vencem. Por isso aqui só se registra o que o endpoint responde agora.
-          echo "Gravado: $PAYLOAD"
-          echo "Endpoint agora: $(curl -sf -m 15 "https://$APP_DOMAIN/api/public/versao-android" || echo indisponível)"
+          # A versão gravada, sendo maior que a do cache, vale já na consulta seguinte. A nova versão
+          # do Worker leva alguns segundos para chegar a todos os servidores: tenta por até 2 min.
+          for i in $(seq 1 12); do
+            AGORA=$(curl -sf -m 15 "https://$APP_DOMAIN/api/public/versao-android" || true)
+            echo "Endpoint ($i): ${AGORA:-indisponível}"
+            if [ "$(echo "$AGORA" | jq -c .)" = "$(echo "$PAYLOAD" | jq -c .)" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::O endpoint não passou a responder $PAYLOAD em 2 minutos."
+          exit 1

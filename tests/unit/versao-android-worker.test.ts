@@ -159,12 +159,28 @@ describe("executar (script usado pelos workflows)", () => {
     }
   });
 
-  it("modo do deploy Web (não estrito): falha não derruba o deploy e não imprime versão", async () => {
-    const r = rodar(["--atual", "nao-json"], async () => {
+  it("modo do deploy Web (não estrito): falha não derruba o deploy", async () => {
+    const fora = async (): Promise<Response> => {
       throw new TypeError("network");
-    });
+    };
+    // Sem versão publicada conhecida: não imprime nada.
+    const r = rodar(["--atual", "nao-json"], fora);
     expect(await r.p).toBe(0);
     expect(r.saida).toEqual([]);
+    // Com a versão publicada: mantém-na (validada), em vez de deixar a reserva vazia.
+    const r2 = rodar(["--atual", '{"versionName":"2.0.3","versionCode":15,"url":"x"}'], fora);
+    expect(await r2.p).toBe(0);
+    expect(r2.saida.join("")).toBe('{"versionName":"2.0.3","versionCode":15}');
+    // Publicada inválida: nada.
+    for (const atual of ['{"versionName":"2.0","versionCode":15}', '{"versionName":"2.0.3"}']) {
+      const r3 = rodar(["--atual", atual], fora);
+      expect(await r3.p).toBe(0);
+      expect(r3.saida).toEqual([]);
+    }
+    // Modo estrito nunca usa a publicada como substituta.
+    const r4 = rodar(["--estrito", "--atual", '{"versionName":"2.0.3","versionCode":15}'], fora);
+    expect(await r4.p).toBe(1);
+    expect(r4.saida).toEqual([]);
   });
 });
 
@@ -176,21 +192,24 @@ describe("workflows: credenciais e segredos", () => {
   it("job do Worker: reutiliza as credenciais da Cloudflare, mascara o token e não grava a chave do GitHub", () => {
     expect(job).toContain("secrets.CLOUDFLARE_API_TOKEN");
     expect(job).toContain('echo "::add-mask::$TOKEN"');
-    expect(job).toContain("secret put VERSAO_ANDROID_DEPLOY");
+    expect(job).toContain("secret put VERSAO_ANDROID_RELEASE");
+    // A variável do deploy Web não é tocada pelo job (sem janela sem versão).
+    expect(job).not.toMatch(/secret (put|delete) VERSAO_ANDROID_DEPLOY/);
     // O que vai para o Worker é só o payload validado (chaves exatas conferidas com jq).
     expect(job).toContain(`jq -e 'keys == ["versionCode","versionName"]'`);
-    expect(job).not.toMatch(/secret put GITHUB|GITHUB_TOKEN[^\n]*secret put/);
     // A chave do GitHub só é usada na etapa de leitura, nunca na de gravação.
-    const gravar = job.slice(job.indexOf("Atualizar VERSAO_ANDROID_DEPLOY"));
+    const gravar = job.slice(job.indexOf("Gravar a versão no Worker"));
     expect(gravar).not.toContain("GITHUB_TOKEN");
     expect(gravar).not.toContain("github.token");
+    // Confere o endpoint e fica vermelho se a versão nova não aparecer.
+    expect(gravar).toContain("exit 1");
   });
 
-  it("deploy Web: VERSAO_ANDROID_DEPLOY sai das variáveis e vai como segredo (sem token do GitHub)", () => {
-    expect(web).not.toMatch(/\.vars = \{[^}]*VERSAO_ANDROID_DEPLOY/);
-    expect(web).toContain('"VERSAO_ANDROID_DEPLOY"];');
+  it("deploy Web: mantém a variável VERSAO_ANDROID_DEPLOY (sem transição) e não envia chave do GitHub", () => {
+    expect(web).toMatch(/\.vars = \{[^}]*VERSAO_ANDROID_DEPLOY: \$versao\}/);
     const segredos = web.slice(web.indexOf("const nomes"), web.indexOf("console.log"));
     expect(segredos).not.toContain("GITHUB_TOKEN");
+    expect(segredos).not.toContain("VERSAO_ANDROID");
   });
 
   it("mudar só o workflow do APK não gera nem republica APK", () => {

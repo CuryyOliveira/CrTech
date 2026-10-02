@@ -7,8 +7,9 @@
  *  1. memória da instância (1 hora);
  *  2. Cache API da Cloudflare (`caches.default`): consultado antes do GitHub (1 hora) e usado
  *     como "última versão conhecida" (30 dias) quando o GitHub falha;
- *  3. versão lida do GitHub no momento do deploy (variável VERSAO_ANDROID_DEPLOY, só
- *     {versionName, versionCode}), para um deploy novo já ter uma versão válida.
+ *  3. versões gravadas no Worker pelo CI, só {versionName, versionCode}: a variável
+ *     VERSAO_ANDROID_DEPLOY (a cada deploy Web) e o segredo VERSAO_ANDROID_RELEASE (logo após
+ *     publicar um APK). Se uma delas for MAIOR que a guardada, o cache está vencido: vale na hora.
  * Tudo o que é lido dessas camadas passa pela mesma validação da resposta do endpoint.
  * Nenhum dado do cliente é usado para montar a consulta.
  */
@@ -127,36 +128,69 @@ export async function versaoAndroidMaisRecente(
     agora?: () => number;
     timeoutMs?: number;
     armazem?: ArmazemVersao | null;
+    /** Variável VERSAO_ANDROID_DEPLOY (gravada a cada deploy Web). */
     deploy?: unknown;
+    /** Segredo VERSAO_ANDROID_RELEASE (gravado logo após publicar um APK). */
+    release?: unknown;
   } = {},
 ): Promise<VersaoApp | null> {
   const agora = (opcoes.agora ?? Date.now)();
-  if (memoria && agora - memoria.em < CACHE_VERSAO_MS) return memoria.valor;
+  // Versões gravadas no Worker (já validadas no CI a partir das releases oficiais).
+  const noWorker = maior(
+    versaoDoDeploy("deploy" in opcoes ? opcoes.deploy : process.env.VERSAO_ANDROID_DEPLOY),
+    versaoDoDeploy("release" in opcoes ? opcoes.release : process.env.VERSAO_ANDROID_RELEASE),
+  );
+  // O Worker recebeu uma versão MAIOR que a guardada (APK novo publicado): o cache está vencido.
+  const superada = (v: VersaoApp) =>
+    noWorker !== null && compararVersoes(noWorker.versionName, v.versionName) > 0;
+
+  if (memoria && agora - memoria.em < CACHE_VERSAO_MS && !superada(memoria.valor)) {
+    return memoria.valor;
+  }
 
   const armazem = opcoes.armazem === undefined ? armazemCloudflare() : opcoes.armazem;
   // Tudo o que vem do armazenamento é validado de novo (pode estar corrompido ou adulterado).
   const guardado = lerRegistro(await armazem?.ler().catch(() => null));
   const guardadoValido = guardado && agora - guardado.em < ULTIMA_CONHECIDA_MS ? guardado : null;
-  if (guardadoValido && agora - guardadoValido.em < CACHE_VERSAO_MS) {
+  if (
+    guardadoValido &&
+    agora - guardadoValido.em < CACHE_VERSAO_MS &&
+    !superada(guardadoValido.valor)
+  ) {
     memoria = guardadoValido;
     return guardadoValido.valor;
+  }
+
+  // Versão nova gravada no Worker e maior que tudo o que estava guardado: vale imediatamente,
+  // sem consultar o GitHub, e substitui o cache (memória e Cache API).
+  if (
+    noWorker &&
+    (memoria || guardadoValido) &&
+    superada(maior(memoria?.valor ?? null, guardadoValido?.valor ?? null)!)
+  ) {
+    memoria = { valor: noWorker, em: agora };
+    await armazem?.gravar(memoria).catch(() => undefined);
+    return noWorker;
   }
 
   const { valor, motivo } = await consultarGithub(
     opcoes.fetch ?? fetch,
     opcoes.timeoutMs ?? TIMEOUT_GITHUB_MS,
   );
-  if (valor) {
+  if (valor && !superada(valor)) {
     memoria = { valor, em: agora };
     await armazem?.gravar(memoria).catch(() => undefined);
     return valor;
   }
+  if (valor) {
+    // GitHub ainda não mostra a versão que o Worker já recebeu: fica com a maior.
+    memoria = { valor: noWorker!, em: agora };
+    await armazem?.gravar(memoria).catch(() => undefined);
+    return noWorker;
+  }
 
   // GitHub fora do ar, lento ou com limite esgotado: última versão válida conhecida, se houver.
-  const deploy = versaoDoDeploy(
-    "deploy" in opcoes ? opcoes.deploy : process.env.VERSAO_ANDROID_DEPLOY,
-  );
-  const reserva = maior(maior(memoria?.valor ?? null, guardadoValido?.valor ?? null), deploy);
+  const reserva = maior(maior(memoria?.valor ?? null, guardadoValido?.valor ?? null), noWorker);
   // Não insiste no GitHub a cada pedido (agravaria o limite): tenta de novo em alguns minutos.
   if (reserva) memoria = { valor: reserva, em: agora - CACHE_VERSAO_MS + RETENTAR_APOS_FALHA_MS };
   console.warn(

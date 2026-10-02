@@ -32,7 +32,20 @@ describe("endpoint versao-android", () => {
     );
     const r = await GET();
     expect(r.status).toBe(200);
+    expect(r.headers.get("cache-control")).toBe("no-store"); // versão nova vale na consulta seguinte
     expect(await r.json()).toStrictEqual({ versionName: "2.0.3", versionCode: 15 });
+  });
+
+  it("segredo VERSAO_ANDROID_RELEASE maior que o cache: resposta seguinte já traz a versão nova", async () => {
+    vi.stubEnv("VERSAO_ANDROID_DEPLOY", '{"versionName":"2.0.3","versionCode":15}');
+    const gh = vi.fn(async () => Response.json([release("android-v2.0.3")]));
+    vi.stubGlobal("fetch", gh);
+    expect(await (await GET()).json()).toStrictEqual({ versionName: "2.0.3", versionCode: 15 });
+    vi.stubEnv("VERSAO_ANDROID_RELEASE", '{"versionName":"2.0.4","versionCode":16,"url":"x"}');
+    const r = await GET();
+    expect(r.status).toBe(200);
+    expect(await r.json()).toStrictEqual({ versionName: "2.0.4", versionCode: 16 });
+    expect(gh).toHaveBeenCalledTimes(1); // a troca não consultou o GitHub
   });
 
   it("GitHub com limite esgotado (403) e versão gravada no deploy: 200, não 503", async () => {

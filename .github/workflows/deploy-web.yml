@@ -41,7 +41,7 @@ jobs:
           # Versão já publicada (para nunca gravar uma inferior); falha → sem comparação.
           ATUAL=$(curl -sf -m 15 "https://$APP_DOMAIN/api/public/versao-android" || true)
           VERSAO=$(npx vite-node scripts/versao-android-deploy.ts --atual "$ATUAL" || true)
-          echo "Versão Android conhecida no deploy: ${VERSAO:-nenhuma (o Worker mantém a reserva atual)}"
+          echo "Versão Android conhecida no deploy: ${VERSAO:-nenhuma}"
           echo "VERSAO_ANDROID_DEPLOY=$VERSAO" >> "$GITHUB_ENV"
 
       - name: Configurar Worker (domínio e variáveis públicas)
@@ -50,8 +50,10 @@ jobs:
           jq --arg dominio "$APP_DOMAIN" \
              --arg url "$SUPABASE_URL" \
              --arg key "$SUPABASE_PUBLISHABLE_KEY" \
+             --arg versao "${VERSAO_ANDROID_DEPLOY:-}" \
              '.routes = [{pattern: $dominio, custom_domain: true}]
-              | .vars = {SUPABASE_URL: $url, SUPABASE_PUBLISHABLE_KEY: $key, APP_URL: ("https://" + $dominio)}' \
+              | .vars = {SUPABASE_URL: $url, SUPABASE_PUBLISHABLE_KEY: $key, APP_URL: ("https://" + $dominio),
+                         VERSAO_ANDROID_DEPLOY: $versao}' \
              dist/server/wrangler.json > dist/server/wrangler.tmp.json
           mv dist/server/wrangler.tmp.json dist/server/wrangler.json
           cat dist/server/wrangler.json
@@ -98,10 +100,7 @@ jobs:
             const nomes = ["SUPABASE_SERVICE_ROLE_KEY","BREVO_API_KEY","MONITOR_HOOK_SECRET",
               "MERCADOPAGO_ACCESS_TOKEN","MERCADOPAGO_TEST_ACCESS_TOKEN","MERCADOPAGO_WEBHOOK_SECRET",
               "MERCADOPAGO_TEST_WEBHOOK_SECRET","MERCADOPAGO_TEST_PAYER_EMAIL","WHATSAPP_ACCESS_TOKEN",
-              "WHATSAPP_PHONE_NUMBER_ID","WHATSAPP_TEMPLATE_INICIO","WHATSAPP_TEMPLATE_CONCLUSAO","WHATSAPP_TEMPLATE_IDIOMA",
-              // Reserva da versão Android (só {versionName, versionCode}); vazia → mantém a atual.
-              // Fica como segredo do Worker para poder ser atualizada sozinha após um novo APK.
-              "VERSAO_ANDROID_DEPLOY"];
+              "WHATSAPP_PHONE_NUMBER_ID","WHATSAPP_TEMPLATE_INICIO","WHATSAPP_TEMPLATE_CONCLUSAO","WHATSAPP_TEMPLATE_IDIOMA"];
             const s = Object.fromEntries(nomes.filter((n) => process.env[n]).map((n) => [n, process.env[n]]));
             console.log("Segredos enviados:", Object.keys(s).join(", ") || "nenhum");
             require("fs").writeFileSync(process.env.RUNNER_TEMP + "/segredos.json", JSON.stringify(s));

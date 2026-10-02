@@ -19,7 +19,9 @@ export const Route = createFileRoute("/api/public/versao-android")({
         }
         return Response.json(
           { versionName: versao.versionName, versionCode: versao.versionCode },
-          { headers: { "cache-control": "public, max-age=3600" } },
+          // Sem cache HTTP (navegador/intermediários): uma versão nova vale já na consulta seguinte.
+          // O custo é baixo: o servidor responde da memória/Cache API sem consultar o GitHub.
+          { headers: { "cache-control": "no-store" } },
         );
       },
     },
