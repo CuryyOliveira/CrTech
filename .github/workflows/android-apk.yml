@@ -5,9 +5,10 @@ on:
     branches:
       - main
       - "claude/**"
+    # Só mudanças no app Android geram APK. Mudar apenas este workflow não gera nem republica APK
+    # (para isso existe o workflow_dispatch).
     paths:
       - "mobile/**"
-      - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
 permissions:
@@ -26,6 +27,8 @@ jobs:
         working-directory: mobile
     env:
       CR_VERSION_CODE: ${{ github.run_number }}
+    outputs:
+      tag_oficial: ${{ steps.publicar_final.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -141,6 +144,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publicar a versão FINAL (somente assinada com a chave de produção)
+        id: publicar_final
         if: ${{ vars.ANDROID_ROTACAO_APROVADA == 'true' }}
         working-directory: apk
         env:
@@ -152,6 +156,7 @@ jobs:
           gh release delete "$TAG" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh release create "$TAG" *-release.apk SHA256SUMS.txt --target "$GITHUB_SHA" --latest \
             --title "Conferência Rápida $VN – Android" --notes "$NOTAS" --repo "$GITHUB_REPOSITORY"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Publicar build de teste na página de Releases (pré-release)
         if: ${{ vars.ANDROID_ROTACAO_APROVADA != 'true' }}
@@ -165,3 +170,72 @@ jobs:
           gh release delete "$TAG" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh release create "$TAG" *.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \
             --title "Conferência Rápida – Android ($GITHUB_REF_NAME)" --notes "$NOTAS" --repo "$GITHUB_REPOSITORY"
+
+  # Depois de publicar uma versão FINAL, atualiza só a reserva VERSAO_ANDROID_DEPLOY do Worker de
+  # produção (segredo do Worker: nova versão do Worker com o mesmo código, sem build nem deploy Web).
+  # Usa as mesmas credenciais da Cloudflare do deploy Web; a chave do GitHub não sai do CI.
+  versao-no-worker:
+    needs: build
+    if: ${{ needs.build.outputs.tag_oficial != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy-web
+      cancel-in-progress: false
+    env:
+      APP_DOMAIN: conferenciarapida.com.br
+      WORKER: curyyoliveira-crtech
+      TAG: ${{ needs.build.outputs.tag_oficial }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar a release oficial e montar {versionName, versionCode}
+        id: versao
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ATUAL=$(curl -sf -m 15 "https://$APP_DOMAIN/api/public/versao-android" || true)
+          echo "Versão hoje no endpoint: ${ATUAL:-indisponível}"
+          # --estrito: release ausente, draft, pré-release, tag/versão inválida, sem versionCode
+          # ou versão inferior à publicada → falha aqui e nada é gravado.
+          PAYLOAD=$(npx vite-node scripts/versao-android-deploy.ts --estrito --tag "$TAG" --atual "$ATUAL")
+          echo "$PAYLOAD" | jq -e 'keys == ["versionCode","versionName"]' > /dev/null
+          echo "Será gravado no Worker: $PAYLOAD"
+          echo "payload=$PAYLOAD" >> "$GITHUB_OUTPUT"
+
+      - name: Credenciais da Cloudflare
+        env:
+          TOKEN_BRUTO: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CONTA_BRUTA: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          TOKEN=$(printf '%s' "$TOKEN_BRUTO" | tr -d '[:space:]')
+          CONTA=$(printf '%s' "$CONTA_BRUTA" | grep -oiE '[0-9a-f]{32}' | head -1)
+          if [ -z "$TOKEN" ]; then echo "::error::Segredo CLOUDFLARE_API_TOKEN vazio ou ausente."; exit 1; fi
+          echo "::add-mask::$TOKEN"
+          echo "CLOUDFLARE_API_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          if [ -n "$CONTA" ]; then echo "CLOUDFLARE_ACCOUNT_ID=$CONTA" >> "$GITHUB_ENV"; fi
+
+      - name: Atualizar VERSAO_ANDROID_DEPLOY no Worker de produção
+        env:
+          PAYLOAD: ${{ steps.versao.outputs.payload }}
+        run: |
+          printf '%s' "$PAYLOAD" | npx --yes wrangler@4 secret put VERSAO_ANDROID_DEPLOY --name "$WORKER"
+
+      - name: Conferir o endpoint de produção (informativo)
+        env:
+          PAYLOAD: ${{ steps.versao.outputs.payload }}
+        run: |
+          # O endpoint prefere a consulta ao GitHub e o cache de 1 h; a reserva nova vale quando eles
+          # falham ou vencem. Por isso aqui só se registra o que o endpoint responde agora.
+          echo "Gravado: $PAYLOAD"
+          echo "Endpoint agora: $(curl -sf -m 15 "https://$APP_DOMAIN/api/public/versao-android" || echo indisponível)"
