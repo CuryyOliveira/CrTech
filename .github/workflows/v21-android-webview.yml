@@ -56,7 +56,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Versão fixa: "latest" consulta a API do GitHub e falha quando o limite de consultas
+          # do runner se esgota ("rate limit exceeded"); com versão fixa o download é direto.
+          version: 2.119.0
 
       - name: Dependências
         run: npm ci
