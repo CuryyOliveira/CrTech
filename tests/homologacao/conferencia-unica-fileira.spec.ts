@@ -1,8 +1,8 @@
 /**
- * Conferência única por fileira (letra da locação) no app REAL: módulo → lista → fileira.
- * "P01 − A01" é a fileira A; só os itens das fileiras marcadas entram na conferência.
+ * Conferência única por PRATELEIRA e FILEIRA no app REAL: módulo → lista → prateleira → fileira.
+ * A fileira vale só dentro da prateleira: P02 + B nunca traz P01/B nem P03/B.
  */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { APP_V2, sql } from "./ambiente";
 import { entrar } from "./apoio";
 import { EMPRESA_H, LISTAS, MODULO_H, semear, type Usuarios } from "./semear";
@@ -28,13 +28,16 @@ test.beforeAll(async () => {
     [LISTA_PRATELEIRA, EMPRESA_H, MODULO_H],
   );
   await sql("DELETE FROM materiais WHERE unidade_id = $1", [LISTA_PRATELEIRA]);
+  // Cenário "ABRASIVOS": B existe em P01, P02 e P03; P05 - PAREDE não tem letra.
   const itens: [string, string][] = [
-    ["F-A1", "P01 − A01"],
-    ["F-A2", "P01 − A02"],
-    ["F-B1", "P01 − B01"],
-    ["F-B2", "P01 - B02"],
-    ["F-B3", "P02 – B03"],
-    ["F-X1", "P05 - PAREDE"],
+    ["F-P01A01", "P01 − A01"],
+    ["F-P01B01", "P01 - B01"],
+    ["F-P01B02", "P01 - B02"],
+    ["F-P02A01", "P02 - A01"],
+    ["F-P02B01", "P02 – B01"],
+    ["F-P02B02", "P02 - B02"],
+    ["F-P03B01", "P03 - B01"],
+    ["F-P05PAR", "P05 - PAREDE"],
   ];
   for (const [codigo, locacao] of itens) {
     await sql(
@@ -50,64 +53,107 @@ test.afterAll(async () => {
   await cancelarUnicas();
 });
 
-test("módulo → lista → fileira B: só os itens da fileira B entram", async ({ page }) => {
-  await entrar(page, APP, u.conferenteA.email);
+async function abrirLista(page: Page) {
   await page.goto(`${APP}/conferencia-unica`);
   await page.getByRole("button", { name: /Frota Homologação/ }).click();
-
-  // Só a lista pequena (locações sem fileira): a etapa de fileira não aparece.
-  await page.getByText(LISTAS.pequena.nome).click();
-  await expect(page.getByTestId("etapa-fileiras")).toHaveCount(0);
-  await page.getByText(LISTAS.pequena.nome).click(); // desmarca
-
-  // Lista de prateleira: fileiras A (2) e B (3); 1 item sem fileira.
   await page.getByText("Homolog Prateleira").click();
-  const etapa = page.getByTestId("etapa-fileiras");
-  await expect(etapa).toBeVisible();
-  await expect(page.getByTestId("fileira-A")).toContainText("(2)");
-  await expect(page.getByTestId("fileira-B")).toContainText("(3)");
-  await expect(etapa).toContainText("1 item sem fileira");
+  await expect(page.getByTestId("etapa-prateleiras")).toBeVisible();
+}
 
-  await page.getByTestId("fileira-B").click();
-  await expect(page.getByTestId("fileira-B")).toHaveAttribute("aria-pressed", "true");
-  await expect(etapa).toContainText("Conferindo só a fileira B");
-
-  await page.getByRole("button", { name: "Iniciar conferência única" }).click();
-  await page.waitForURL(/\/unidade\//, { timeout: 30_000 });
-
+async function conferenciaAberta() {
   const [conf] = await sql<{ id: string; observacoes: string | null }>(
     `SELECT c.id, c.observacoes FROM conferencias c JOIN unidades un ON un.id = c.unidade_id
       WHERE un.nome LIKE 'Conferência única%' AND c.status = 'em_andamento'
       ORDER BY c.created_at DESC LIMIT 1`,
   );
-  expect(conf.observacoes).toBe("Fileiras: B");
   const itens = await sql<{ codigo: string }>(
     "SELECT codigo FROM conferencia_itens WHERE conferencia_id = $1 ORDER BY codigo",
     [conf.id],
   );
-  expect(itens.map((i) => i.codigo)).toEqual(["F-B1", "F-B2", "F-B3"]);
-});
+  return { observacoes: conf.observacoes, codigos: itens.map((i) => i.codigo) };
+}
 
-test("sem fileira marcada: entram todos os itens da lista (comportamento anterior)", async ({
+test("lista → prateleira P02 → fileira B: só P02/B entra (nunca P01/B nem P03/B)", async ({
   page,
 }) => {
-  await cancelarUnicas();
   await entrar(page, APP, u.conferenteA.email);
   await page.goto(`${APP}/conferencia-unica`);
   await page.getByRole("button", { name: /Frota Homologação/ }).click();
+
+  // Lista sem locações de prateleira: nenhuma etapa nova aparece.
+  await page.getByText(LISTAS.pequena.nome).click();
+  await expect(page.getByTestId("etapa-prateleiras")).toHaveCount(0);
+  await page.getByText(LISTAS.pequena.nome).click(); // desmarca
+
   await page.getByText("Homolog Prateleira").click();
-  await expect(page.getByTestId("etapa-fileiras")).toBeVisible();
+  const prateleiras = page.getByTestId("etapa-prateleiras");
+  await expect(prateleiras).toBeVisible();
+  await expect(page.getByTestId("prateleira-P01")).toContainText("(3)");
+  await expect(page.getByTestId("prateleira-P02")).toContainText("(3)");
+  await expect(page.getByTestId("prateleira-P03")).toContainText("(1)");
+  await expect(page.getByTestId("prateleira-P05")).toContainText("(1)");
+  // A fileira só aparece depois de escolher a prateleira (nada de letra global).
+  await expect(page.getByTestId("etapa-fileiras")).toHaveCount(0);
+  await expect(page.getByTestId("resumo-selecao")).toContainText("8 itens");
+
+  await page.getByTestId("prateleira-P02").click();
+  await expect(page.getByTestId("prateleira-P02")).toHaveAttribute("aria-pressed", "true");
+  const fileiras = page.getByTestId("etapa-fileiras");
+  await expect(fileiras).toContainText("P02");
+  // Contadores só de P02: A (1), B (2) — e nenhuma letra de outras prateleiras.
+  await expect(page.getByTestId("fileira-A")).toContainText("(1)");
+  await expect(page.getByTestId("fileira-B")).toContainText("(2)");
+  await expect(fileiras.getByRole("button")).toHaveCount(2);
+  await expect(page.getByTestId("resumo-selecao")).toContainText("3 itens");
+
+  await page.getByTestId("fileira-B").click();
+  await expect(page.getByTestId("resumo-selecao")).toContainText(
+    "2 itens serão conferidos · Prateleiras: P02 | Fileiras: B",
+  );
+
   await page.getByRole("button", { name: "Iniciar conferência única" }).click();
   await page.waitForURL(/\/unidade\//, { timeout: 30_000 });
-  const [conf] = await sql<{ id: string; observacoes: string | null }>(
-    `SELECT c.id, c.observacoes FROM conferencias c JOIN unidades un ON un.id = c.unidade_id
-      WHERE un.nome LIKE 'Conferência única%' AND c.status = 'em_andamento'
-      ORDER BY c.created_at DESC LIMIT 1`,
-  );
-  expect(conf.observacoes).toBeNull();
-  const [{ n }] = await sql<{ n: number }>(
-    "SELECT count(*)::int AS n FROM conferencia_itens WHERE conferencia_id = $1",
-    [conf.id],
-  );
-  expect(n).toBe(6);
+
+  const r = await conferenciaAberta();
+  expect(r.observacoes).toBe("Prateleiras: P02 | Fileiras: B");
+  expect(r.codigos).toEqual(["F-P02B01", "F-P02B02"]);
+  expect(r.codigos.filter((c) => /^F-P0[13]B/.test(c))).toEqual([]);
+});
+
+test("só a prateleira P02: entra toda a prateleira", async ({ page }) => {
+  await cancelarUnicas();
+  await entrar(page, APP, u.conferenteA.email);
+  await abrirLista(page);
+  await page.getByTestId("prateleira-P02").click();
+  await page.getByRole("button", { name: "Iniciar conferência única" }).click();
+  await page.waitForURL(/\/unidade\//, { timeout: 30_000 });
+  const r = await conferenciaAberta();
+  expect(r.observacoes).toBe("Prateleiras: P02");
+  expect(r.codigos).toEqual(["F-P02A01", "F-P02B01", "F-P02B02"]);
+});
+
+test("P01 + P03 com fileira B: (P01 e B) ou (P03 e B)", async ({ page }) => {
+  await cancelarUnicas();
+  await entrar(page, APP, u.conferenteA.email);
+  await abrirLista(page);
+  await page.getByTestId("prateleira-P01").click();
+  await page.getByTestId("prateleira-P03").click();
+  await expect(page.getByTestId("fileira-B")).toContainText("(3)");
+  await page.getByTestId("fileira-B").click();
+  await page.getByRole("button", { name: "Iniciar conferência única" }).click();
+  await page.waitForURL(/\/unidade\//, { timeout: 30_000 });
+  const r = await conferenciaAberta();
+  expect(r.observacoes).toBe("Prateleiras: P01, P03 | Fileiras: B");
+  expect(r.codigos).toEqual(["F-P01B01", "F-P01B02", "F-P03B01"]);
+});
+
+test("sem filtro: entram todos os itens da lista (comportamento anterior)", async ({ page }) => {
+  await cancelarUnicas();
+  await entrar(page, APP, u.conferenteA.email);
+  await abrirLista(page);
+  await page.getByRole("button", { name: "Iniciar conferência única" }).click();
+  await page.waitForURL(/\/unidade\//, { timeout: 30_000 });
+  const r = await conferenciaAberta();
+  expect(r.observacoes).toBeNull();
+  expect(r.codigos).toHaveLength(8);
 });

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ClipboardList, Layers, Play, Rows3 } from "lucide-react";
+import { ArrowLeft, ClipboardList, Columns3, Layers, Play, Rows3 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,10 +10,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { IconeModulo } from "@/components/IconeModulo";
 import { useModulos } from "@/hooks/useModulos";
-import { db, normalize, salvarMateriais, type Unidade } from "@/lib/app";
+import { db, salvarMateriais, type Unidade } from "@/lib/app";
 import { dataLocalISO, agoraLocalISO } from "@/lib/datas";
 import { registrarAuditoria } from "@/lib/audit";
-import { fileiraDaLocacao } from "@/lib/texto";
+import {
+  ajustarFiltro,
+  descreverFiltro,
+  fileirasDasPrateleiras,
+  resumirLocacoes,
+  selecionarItens,
+} from "@/lib/conferencia-unica-filtro";
 import type { ModuloResolvido } from "@/lib/modulos";
 
 export const Route = createFileRoute("/_authenticated/conferencia-unica")({
@@ -72,8 +78,13 @@ function ConferenciaUnica() {
   const qc = useQueryClient();
   const [modulo, setModulo] = useState<ModuloResolvido | null>(null);
   const [selecionadas, setSelecionadas] = useState<string[]>([]);
-  // Fileiras (letra da locação, ex.: "P01 − A01" → A). Nenhuma marcada = todas.
+  // Prateleira (ex.: "P02 − B01" → P02) e, dentro dela, fileira (→ B). Nenhuma marcada = todas.
+  const [prateleiras, setPrateleiras] = useState<string[]>([]);
   const [fileiras, setFileiras] = useState<string[]>([]);
+  const limparFiltro = () => {
+    setPrateleiras([]);
+    setFileiras([]);
+  };
 
   // Listas (unidades) do módulo escolhido, exceto a unidade da conferência única.
   const { data: listas = [], isLoading: carregandoListas } = useQuery({
@@ -92,37 +103,51 @@ function ConferenciaUnica() {
   });
 
   const alternar = (id: string) => {
-    setFileiras([]);
+    limparFiltro();
     setSelecionadas((atual) =>
       atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id],
     );
+  };
+  // Listas consideradas: as marcadas ou, sem nenhuma marcada, todas do módulo.
+  const idsListas = selecionadas.length ? selecionadas : listas.map((l) => l.id);
+
+  // Itens das listas consideradas (em páginas de 1.000), para descobrir prateleiras e fileiras.
+  const { data: materiaisListas, isFetching: carregandoItens } = useQuery({
+    queryKey: ["locacoes-unica", modulo?.chave, [...idsListas].sort().join(",")],
+    enabled: Boolean(modulo) && idsListas.length > 0,
+    queryFn: () => materiaisDasListas(idsListas),
+  });
+  const resumo = useMemo(
+    () => (materiaisListas ? resumirLocacoes(materiaisListas) : null),
+    [materiaisListas],
+  );
+  // Filtro efetivo: só prateleiras existentes e fileiras existentes DENTRO delas.
+  const filtro = useMemo(
+    () =>
+      resumo ? ajustarFiltro(resumo, { prateleiras, fileiras }) : { prateleiras: [], fileiras: [] },
+    [resumo, prateleiras, fileiras],
+  );
+  const fileirasDisponiveis = useMemo(
+    () => (resumo ? fileirasDasPrateleiras(resumo, filtro.prateleiras) : null),
+    [resumo, filtro.prateleiras],
+  );
+  const totalSelecionado = useMemo(
+    () => (materiaisListas ? selecionarItens(materiaisListas, filtro).length : null),
+    [materiaisListas, filtro],
+  );
+
+  const alternarPrateleira = (p: string) => {
+    const novas = prateleiras.includes(p)
+      ? prateleiras.filter((x) => x !== p)
+      : [...prateleiras, p];
+    setPrateleiras(novas);
+    // Fileiras que deixaram de existir nas prateleiras marcadas saem da seleção.
+    if (resumo) setFileiras(ajustarFiltro(resumo, { prateleiras: novas, fileiras }).fileiras);
   };
   const alternarFileira = (letra: string) =>
     setFileiras((atual) =>
       atual.includes(letra) ? atual.filter((x) => x !== letra) : [...atual, letra].sort(),
     );
-
-  // Listas consideradas: as marcadas ou, sem nenhuma marcada, todas do módulo.
-  const idsListas = selecionadas.length ? selecionadas : listas.map((l) => l.id);
-
-  // Fileiras existentes nas locações das listas consideradas (com quantidade de itens).
-  const { data: resumoFileiras } = useQuery({
-    queryKey: ["fileiras-unica", modulo?.chave, [...idsListas].sort().join(",")],
-    enabled: Boolean(modulo) && idsListas.length > 0,
-    queryFn: async () => {
-      const contagem = new Map<string, number>();
-      let semFileira = 0;
-      for (const m of await materiaisDasListas(idsListas)) {
-        const letra = fileiraDaLocacao(m.locacao);
-        if (letra) contagem.set(letra, (contagem.get(letra) ?? 0) + 1);
-        else semFileira++;
-      }
-      return {
-        letras: [...contagem.entries()].sort(([a], [b]) => a.localeCompare(b)),
-        semFileira,
-      };
-    },
-  });
 
   const iniciar = useMutation({
     mutationFn: async () => {
@@ -158,29 +183,18 @@ function ConferenciaUnica() {
         .maybeSingle();
       if (aberta) return { unidade, retomada: true };
 
-      // Reúne os itens das listas escolhidas (sem duplicar códigos), só das fileiras marcadas.
-      const filtro = new Set(fileiras);
-      const materiaisOrigem = (await materiaisDasListas(idsListas)).filter(
-        (m) => filtro.size === 0 || filtro.has(fileiraDaLocacao(m.locacao) ?? ""),
-      );
-      const vistos = new Set<string>();
-      const itens = materiaisOrigem
-        .filter((m) => {
-          const chave = normalize(m.codigo) || normalize(m.descricao);
-          if (vistos.has(chave)) return false;
-          vistos.add(chave);
-          return true;
-        })
-        .map((m) => ({
-          codigo: m.codigo,
-          descricao: m.descricao,
-          locacao: m.locacao,
-          quantidade_esperada: m.quantidade_esperada,
-        }));
+      // Reúne os itens das listas escolhidas (sem duplicar códigos), só da prateleira/fileira
+      // marcadas. Releitura no momento de iniciar: vale o estado atual das listas.
+      const itens = selecionarItens(await materiaisDasListas(idsListas), filtro).map((m) => ({
+        codigo: m.codigo,
+        descricao: m.descricao,
+        locacao: m.locacao,
+        quantidade_esperada: m.quantidade_esperada,
+      }));
       if (!itens.length)
         throw new Error(
-          fileiras.length
-            ? "Nenhum item nas fileiras escolhidas"
+          descreverFiltro(filtro)
+            ? "Nenhum item na prateleira/fileira escolhida"
             : "Nenhum item encontrado nas listas selecionadas",
         );
 
@@ -197,7 +211,7 @@ function ConferenciaUnica() {
           tipo: modulo.tipoUnidade,
           data: dataLocalISO(),
           hora_inicio: agoraLocalISO(),
-          ...(fileiras.length ? { observacoes: `Fileiras: ${fileiras.join(", ")}` } : {}),
+          ...(descreverFiltro(filtro) ? { observacoes: descreverFiltro(filtro) } : {}),
         })
         .select()
         .single();
@@ -232,7 +246,13 @@ function ConferenciaUnica() {
         })),
       );
       if (eItens) throw eItens;
-      return { unidade, conferencia: conf, itens: itens.length, retomada: false };
+      return {
+        unidade,
+        conferencia: conf,
+        itens: itens.length,
+        filtro: descreverFiltro(filtro),
+        retomada: false,
+      };
     },
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["conferencias", r.unidade.id] });
@@ -243,7 +263,7 @@ function ConferenciaUnica() {
           tipo: "operacao",
           acao: "conferencia_unica_iniciada",
           detalhe: `Conferência única iniciada com ${r.itens} itens${
-            fileiras.length ? ` (fileiras ${fileiras.join(", ")})` : ""
+            r.filtro ? ` (${r.filtro})` : ""
           }`,
           modulo: modulo?.chave ?? null,
           lista: r.unidade.nome,
@@ -292,7 +312,7 @@ function ConferenciaUnica() {
                   onClick={() => {
                     setModulo(m);
                     setSelecionadas([]);
-                    setFileiras([]);
+                    limparFiltro();
                   }}
                   className="text-left"
                 >
@@ -355,53 +375,113 @@ function ConferenciaUnica() {
                     </div>
                   </>
                 )}
-                {resumoFileiras && resumoFileiras.letras.length > 0 && (
-                  <div className="space-y-2 border-t pt-3" data-testid="etapa-fileiras">
+                {resumo && resumo.prateleiras.length > 0 && (
+                  <div className="space-y-2 border-t pt-3" data-testid="etapa-prateleiras">
                     <h3 className="flex items-center gap-2 text-sm font-semibold">
-                      <Rows3 className="size-4 text-primary" /> 3. Fileira (letra da locação) —
-                      opcional
+                      <Columns3 className="size-4 text-primary" /> 3. Prateleira — opcional
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      Ex.: P01 − <strong>A</strong>01 é a fileira A. Nenhuma marcada = todas as
-                      fileiras.
-                      {resumoFileiras.semFileira > 0 &&
-                        ` ${resumoFileiras.semFileira} ${
-                          resumoFileiras.semFileira === 1
-                            ? "item sem fileira só entra"
-                            : "itens sem fileira só entram"
+                      Ex.: <strong>P02</strong> − B01 é a prateleira P02. Nenhuma marcada = todos os
+                      itens.
+                      {resumo.semPrateleira > 0 &&
+                        ` ${resumo.semPrateleira} ${
+                          resumo.semPrateleira === 1
+                            ? "item sem prateleira só entra"
+                            : "itens sem prateleira só entram"
                         } sem filtro.`}
                     </p>
-                    <div className="flex flex-wrap gap-2" role="group" aria-label="Fileiras">
-                      {resumoFileiras.letras.map(([letra, qtd]) => {
-                        const ativa = fileiras.includes(letra);
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Prateleiras">
+                      {resumo.prateleiras.map((p) => {
+                        const ativa = filtro.prateleiras.includes(p.prateleira);
                         return (
                           <Button
-                            key={letra}
+                            key={p.prateleira}
                             type="button"
                             size="sm"
                             variant={ativa ? "default" : "outline"}
                             aria-pressed={ativa}
-                            className="h-11 min-w-16 gap-1 text-base font-bold"
-                            data-testid={`fileira-${letra}`}
-                            onClick={() => alternarFileira(letra)}
+                            className="h-11 min-w-20 gap-1 text-base font-bold"
+                            data-testid={`prateleira-${p.prateleira}`}
+                            onClick={() => alternarPrateleira(p.prateleira)}
                           >
-                            {letra}
-                            <span className="text-xs font-normal opacity-80">({qtd})</span>
+                            {p.prateleira}
+                            <span className="text-xs font-normal opacity-80">({p.total})</span>
                           </Button>
                         );
                       })}
                     </div>
-                    {fileiras.length > 0 && (
-                      <p className="text-xs font-medium text-primary">
-                        Conferindo só a{fileiras.length > 1 ? "s fileiras" : " fileira"}{" "}
-                        {fileiras.join(", ")}.
+                  </div>
+                )}
+                {filtro.prateleiras.length > 0 && fileirasDisponiveis && (
+                  <div className="space-y-2 border-t pt-3" data-testid="etapa-fileiras">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold">
+                      <Rows3 className="size-4 text-primary" /> 4. Fileira (letra da locação) —
+                      opcional
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Prateleira{filtro.prateleiras.length > 1 ? "s" : ""} selecionada
+                      {filtro.prateleiras.length > 1 ? "s" : ""}:{" "}
+                      <strong>{filtro.prateleiras.join(", ")}</strong>. Nenhuma fileira marcada =
+                      toda a prateleira.
+                      {fileirasDisponiveis.semFileira > 0 &&
+                        ` ${fileirasDisponiveis.semFileira} ${
+                          fileirasDisponiveis.semFileira === 1
+                            ? "item sem fileira só entra"
+                            : "itens sem fileira só entram"
+                        } sem fileira marcada.`}
+                    </p>
+                    {fileirasDisponiveis.fileiras.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Nenhuma fileira com letra nesta prateleira.
                       </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Fileiras">
+                        {fileirasDisponiveis.fileiras.map(([letra, qtd]) => {
+                          const ativa = filtro.fileiras.includes(letra);
+                          return (
+                            <Button
+                              key={letra}
+                              type="button"
+                              size="sm"
+                              variant={ativa ? "default" : "outline"}
+                              aria-pressed={ativa}
+                              className="h-11 min-w-16 gap-1 text-base font-bold"
+                              data-testid={`fileira-${letra}`}
+                              onClick={() => alternarFileira(letra)}
+                            >
+                              {letra}
+                              <span className="text-xs font-normal opacity-80">({qtd})</span>
+                            </Button>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 )}
+                {totalSelecionado !== null && (
+                  <p
+                    className={`text-sm font-medium ${
+                      totalSelecionado === 0 ? "text-destructive" : "text-primary"
+                    }`}
+                    data-testid="resumo-selecao"
+                    aria-live="polite"
+                  >
+                    {totalSelecionado === 0
+                      ? "Nenhum item nesta seleção."
+                      : `${totalSelecionado} ${totalSelecionado === 1 ? "item" : "itens"} serão conferidos${
+                          descreverFiltro(filtro) ? ` · ${descreverFiltro(filtro)}` : ""
+                        }.`}
+                  </p>
+                )}
                 <Button
                   className="w-full gap-2"
-                  disabled={iniciar.isPending || carregandoListas || listas.length === 0}
+                  disabled={
+                    iniciar.isPending ||
+                    carregandoListas ||
+                    listas.length === 0 ||
+                    (Boolean(filtro.prateleiras.length) && carregandoItens) ||
+                    totalSelecionado === 0
+                  }
                   onClick={() => iniciar.mutate()}
                 >
                   <Play className="size-4" />
