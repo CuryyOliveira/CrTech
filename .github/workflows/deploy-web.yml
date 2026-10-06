@@ -1,0 +1,109 @@
+name: Publicar sistema (Cloudflare Workers)
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/app-to-android-apk-irx1ru"
+    paths-ignore:
+      - "mobile/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_DOMAIN: conferenciarapida.com.br
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Build
+        run: npx vite build
+
+      - name: Versão Android oficial no momento do deploy (só versionName/versionCode)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Versão já publicada (para nunca gravar uma inferior); falha → sem comparação.
+          ATUAL=$(curl -sf -m 15 "https://$APP_DOMAIN/api/public/versao-android" || true)
+          VERSAO=$(npx vite-node scripts/versao-android-deploy.ts --atual "$ATUAL" || true)
+          echo "Versão Android conhecida no deploy: ${VERSAO:-nenhuma}"
+          echo "VERSAO_ANDROID_DEPLOY=$VERSAO" >> "$GITHUB_ENV"
+
+      - name: Configurar Worker (domínio e variáveis públicas)
+        run: |
+          set -a; . ./.env; set +a
+          jq --arg dominio "$APP_DOMAIN" \
+             --arg url "$SUPABASE_URL" \
+             --arg key "$SUPABASE_PUBLISHABLE_KEY" \
+             --arg versao "${VERSAO_ANDROID_DEPLOY:-}" \
+             '.routes = [{pattern: $dominio, custom_domain: true}]
+              | .vars = {SUPABASE_URL: $url, SUPABASE_PUBLISHABLE_KEY: $key, APP_URL: ("https://" + $dominio),
+                         VERSAO_ANDROID_DEPLOY: $versao}' \
+             dist/server/wrangler.json > dist/server/wrangler.tmp.json
+          mv dist/server/wrangler.tmp.json dist/server/wrangler.json
+          cat dist/server/wrangler.json
+
+      - name: Credenciais da Cloudflare
+        env:
+          TOKEN_BRUTO: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CONTA_BRUTA: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Remove espaços/quebras de linha colados junto com os valores.
+          TOKEN=$(printf '%s' "$TOKEN_BRUTO" | tr -d '[:space:]')
+          CONTA=$(printf '%s' "$CONTA_BRUTA" | grep -oiE '[0-9a-f]{32}' | head -1)
+          if [ -z "$TOKEN" ]; then echo "::error::Segredo CLOUDFLARE_API_TOKEN vazio ou ausente."; exit 1; fi
+          echo "::add-mask::$TOKEN"
+          echo "CLOUDFLARE_API_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          if [ -n "$CONTA" ]; then
+            echo "CLOUDFLARE_ACCOUNT_ID=$CONTA" >> "$GITHUB_ENV"
+          else
+            # Sem um Account ID válido, o wrangler descobre a conta a partir do token.
+            echo "::warning::CLOUDFLARE_ACCOUNT_ID ausente ou inválido; usando a conta do token."
+          fi
+
+      - name: Publicar
+        run: npx --yes wrangler@4 deploy --config dist/server/wrangler.json
+
+      - name: Segredos do servidor
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          MONITOR_HOOK_SECRET: ${{ secrets.MONITOR_HOOK_SECRET }}
+          MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+          MERCADOPAGO_TEST_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_TEST_ACCESS_TOKEN }}
+          MERCADOPAGO_WEBHOOK_SECRET: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
+          MERCADOPAGO_TEST_WEBHOOK_SECRET: ${{ secrets.MERCADOPAGO_TEST_WEBHOOK_SECRET }}
+          MERCADOPAGO_TEST_PAYER_EMAIL: ${{ secrets.MERCADOPAGO_TEST_PAYER_EMAIL }}
+          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_TEMPLATE_INICIO: ${{ secrets.WHATSAPP_TEMPLATE_INICIO }}
+          WHATSAPP_TEMPLATE_CONCLUSAO: ${{ secrets.WHATSAPP_TEMPLATE_CONCLUSAO }}
+          WHATSAPP_TEMPLATE_IDIOMA: ${{ secrets.WHATSAPP_TEMPLATE_IDIOMA }}
+        run: |
+          # Envia ao Worker apenas os segredos cadastrados no GitHub.
+          node -e '
+            const nomes = ["SUPABASE_SERVICE_ROLE_KEY","BREVO_API_KEY","MONITOR_HOOK_SECRET",
+              "MERCADOPAGO_ACCESS_TOKEN","MERCADOPAGO_TEST_ACCESS_TOKEN","MERCADOPAGO_WEBHOOK_SECRET",
+              "MERCADOPAGO_TEST_WEBHOOK_SECRET","MERCADOPAGO_TEST_PAYER_EMAIL","WHATSAPP_ACCESS_TOKEN",
+              "WHATSAPP_PHONE_NUMBER_ID","WHATSAPP_TEMPLATE_INICIO","WHATSAPP_TEMPLATE_CONCLUSAO","WHATSAPP_TEMPLATE_IDIOMA"];
+            const s = Object.fromEntries(nomes.filter((n) => process.env[n]).map((n) => [n, process.env[n]]));
+            console.log("Segredos enviados:", Object.keys(s).join(", ") || "nenhum");
+            require("fs").writeFileSync(process.env.RUNNER_TEMP + "/segredos.json", JSON.stringify(s));
+          '
+          npx --yes wrangler@4 secret bulk "$RUNNER_TEMP/segredos.json" --config dist/server/wrangler.json
+          rm -f "$RUNNER_TEMP/segredos.json"

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#ea580c" />
+  <title>Conferência Rápida — sem conexão</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #fdfcfb; --fg: #1c1917; --muted: #78716c; --primary: #ea580c; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #1c1917; --fg: #fafaf9; --muted: #a8a29e; } }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { min-height: 100%; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 24px 16px; text-align: center; gap: 12px; }
+    img { width: 88px; height: 88px; border-radius: 20px; }
+    h1 { font-size: 20px; margin: 8px 0 0; }
+    p { margin: 0; max-width: 340px; color: var(--muted); font-size: 15px; line-height: 1.45; }
+    button { margin-top: 12px; border: 0; border-radius: 10px; padding: 12px 24px; font-size: 16px;
+      font-weight: 600; background: var(--primary); color: #fff; min-width: 200px; }
+    button:active { opacity: .85; }
+    small { color: var(--muted); font-size: 12px; opacity: .8; word-break: break-word; max-width: 340px; }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="icon-512.png" alt="" />
+    <h1>Sem conexão com o servidor</h1>
+    <p>Não foi possível abrir o Conferência Rápida. Verifique sua internet e tente novamente.</p>
+    <p>Depois do primeiro acesso, as telas já visitadas e os dados baixados ficam disponíveis offline.</p>
+    <button id="tentar" type="button">Tentar novamente</button>
+    <small id="detalhe"></small>
+  </main>
+  <script>
+    var params = new URLSearchParams(window.location.search);
+    var destino = params.get("url") || "";
+    var APP_URL = /^https:\/\/([a-z0-9-]+\.)*conferenciarapida\.com\.br\//.test(destino)
+      ? destino
+      : "https://conferenciarapida.com.br/";
+    if (params.get("erro")) document.getElementById("detalhe").textContent = "Detalhe: " + params.get("erro");
+    function tentar() { window.location.replace(APP_URL); }
+    document.getElementById("tentar").addEventListener("click", tentar);
+    window.addEventListener("online", tentar);
+  </script>
+</body>
+</html>
