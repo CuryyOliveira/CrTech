@@ -6,7 +6,9 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { ambienteCobranca } from "@/lib/cobranca";
 import {
+  ambienteDaNotificacao,
   obterPagamentoAutorizado,
   obterPreapproval,
   periodicidadeInterna,
@@ -299,7 +301,8 @@ async function processar(req: Request) {
 
   if (!tipo || !recursoId) throw new Error("Notificação sem tipo ou identificador");
 
-  const ambiente: AmbienteCobranca = evento.live_mode === true ? "live" : "sandbox";
+  // Sem `live_mode` (notificações de assinatura), vale o ambiente configurado no sistema.
+  const ambiente: AmbienteCobranca = ambienteDaNotificacao(evento.live_mode, ambienteCobranca());
   const sb = getSupabase();
   const eventoId = `${tipo}:${recursoId}:${evento.action ?? "-"}:${evento.id ?? "-"}`;
 
@@ -342,7 +345,8 @@ async function processar(req: Request) {
     }
     await sb
       .from("webhook_eventos_pagamento")
-      .update({ processado: true, processado_em: new Date().toISOString() })
+      // `ambiente` corrige o registro de uma tentativa anterior classificada de outra forma.
+      .update({ processado: true, processado_em: new Date().toISOString(), ambiente })
       .eq("provider", PROVIDER)
       .eq("provider_event_id", eventoId);
   } catch (e) {

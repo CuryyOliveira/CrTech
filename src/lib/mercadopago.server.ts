@@ -198,6 +198,20 @@ export function periodicidadeInterna(pre: Preapproval): string | null {
   return null;
 }
 
+/**
+ * Ambiente de uma notificação do webhook. Quando o provedor informa `live_mode`, ele decide;
+ * as notificações de assinatura (`subscription_preapproval`) não trazem o campo — nesse caso
+ * vale o ambiente configurado no sistema (em produção, "live").
+ */
+export function ambienteDaNotificacao(
+  liveMode: unknown,
+  configurado: AmbienteCobranca,
+): AmbienteCobranca {
+  if (liveMode === true) return "live";
+  if (liveMode === false) return "sandbox";
+  return configurado;
+}
+
 /** Assinatura HMAC ausente ou inválida: a requisição é rejeitada (401/403). */
 export class ErroAssinaturaWebhook extends Error {
   constructor(public readonly motivo: string) {
