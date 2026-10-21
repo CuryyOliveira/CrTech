@@ -1,0 +1,2 @@
+ALTER TABLE public.conferencias ALTER COLUMN data SET DEFAULT ((now() AT TIME ZONE 'America/Sao_Paulo'))::date;
+ALTER TABLE public.historico_conferencias ALTER COLUMN data SET DEFAULT ((now() AT TIME ZONE 'America/Sao_Paulo'))::date;

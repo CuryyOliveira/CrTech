@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.historico_cascade_notificacoes() FROM PUBLIC, anon, authenticated;

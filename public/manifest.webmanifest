@@ -1,0 +1,13 @@
+{
+  "name": "Conferência de Materiais",
+  "short_name": "Conferência",
+  "description": "Inventário e conferência de materiais da oficina",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdfcfb",
+  "theme_color": "#ea580c",
+  "icons": [
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

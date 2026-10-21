@@ -1,0 +1,1 @@
+DELETE FROM public.notificacoes_conferencia WHERE conferencia_id IS NULL;

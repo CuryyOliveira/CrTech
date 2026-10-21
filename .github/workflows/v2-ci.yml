@@ -1,0 +1,118 @@
+name: V2 · CI (testes, banco, build — sem deploy)
+
+# Somente a branch da V2. Nenhum segredo de produção é usado; nada é publicado.
+on:
+  push:
+    branches: [v2-development]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v2-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        # Mesma versão principal da produção (Postgres 17). Banco DESCARTÁVEL de teste.
+        image: postgres:17
+        env:
+          POSTGRES_USER: supabase_admin
+          POSTGRES_PASSWORD: supabase_admin
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U supabase_admin" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PG_ADMIN_URL: postgresql://supabase_admin:supabase_admin@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint dos arquivos da Fase 0 e da V2.2/V2.3
+        run: >-
+          npx eslint vitest.config.ts tests src/lib/tentativas-login.server.ts src/lib/audit.functions.ts
+          src/lib/sync-v2 src/components/sync-v2 src/lib/offline/dono.ts
+          src/lib/conferencia-v2 src/components/conferencia-v2 src/lib/texto.ts playwright.config.ts
+
+      - name: Lint do repositório inteiro (informativo — pendências anteriores à V2)
+        continue-on-error: true
+        run: npx eslint . --quiet | tail -3
+
+      - name: Baseline idêntica à produção
+        run: |
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+          export PG_TESTE_BANCO=cr_baseline
+          psql "$PG_ADMIN_URL" -q -c "DROP DATABASE IF EXISTS cr_baseline" -c "CREATE DATABASE cr_baseline"
+          BASE="${PG_ADMIN_URL%/*}/cr_baseline"
+          psql "$BASE" -v ON_ERROR_STOP=1 -q -f supabase/tests/bootstrap.sql
+          psql "${BASE/supabase_admin:supabase_admin@/postgres:postgres@}" -v ON_ERROR_STOP=1 -q \
+            -f supabase/migrations/20260929120000_baseline_v2.sql
+          PGOPTIONS='-c search_path=public,extensions' psql "$BASE" -At \
+            -f supabase/baseline/consultas_catalogo.sql > "$RUNNER_TEMP/catalogo.json"
+          python3 supabase/baseline/comparar_catalogo.py supabase/baseline/catalogo_producao_20260929.json "$RUNNER_TEMP/catalogo.json"
+
+      - name: Testes unitários
+        run: npm run test:unit
+
+      - name: Testes de banco (RLS, isolamento, integridade, idempotência, regressão V1, eventos, motor de sync)
+        run: npm run test:db
+
+      - name: Estresse da sincronização (500 / 1.000 / 5.000 eventos)
+        env:
+          CR_ESTRESSE: "1"
+        run: npx vitest run --project db tests/db/motor-estresse.test.ts
+
+      - name: Resultado do estresse
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: estresse-sync
+          path: tests/resultados/estresse-sync.json
+          if-no-files-found: ignore
+
+      - name: Conferência V2.1 no navegador (Chromium real, perfis celular e desktop)
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - name: Relatório E2E
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-conferencia-v21
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+      - name: Mesmos testes contra o schema ATUAL da produção (esperado falhar nas correções da Fase 0)
+        continue-on-error: true
+        env:
+          CR_MIGRATIONS_ATE: "20260929120000"
+        run: npx vitest run --project db --reporter=dot || echo "Falhas acima = comportamentos corrigidos pela Fase 0."
+
+      - name: Build web (sem deploy)
+        run: npm run build
+
+      - name: Service worker do build de produção é JavaScript completo
+        run: |
+          node --check dist/client/sw.js
+          for f in dist/client/workbox-*.js; do node --check "$f"; done
+
+      - name: Build web com a conferência V2 ligada (sem deploy)
+        env:
+          VITE_CONFERENCE_V2: "1"
+        run: npm run build

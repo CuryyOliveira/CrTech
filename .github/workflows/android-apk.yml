@@ -1,0 +1,249 @@
+name: APK Android
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+    # Só mudanças no app Android geram APK. Mudar apenas este workflow não gera nem republica APK
+    # (para isso existe o workflow_dispatch).
+    paths:
+      - "mobile/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      CR_VERSION_CODE: ${{ github.run_number }}
+    outputs:
+      tag_oficial: ${{ steps.publicar_final.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Instalar Capacitor
+        run: npm ci
+
+      - name: Sincronizar projeto Android
+        run: npx cap sync android
+
+      - name: Build (debug + release), testes e lint
+        working-directory: mobile/android
+        env:
+          # Com a rotação aprovada, o release sai sem assinatura e é assinado no passo seguinte.
+          ANDROID_RELEASE_SEM_ASSINATURA: ${{ vars.ANDROID_ROTACAO_APROVADA == 'true' && secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleRelease
+
+      - name: Assinar o release com rotação de chave (somente com aprovação explícita)
+        if: ${{ vars.ANDROID_ROTACAO_APROVADA == 'true' }}
+        # Caminhos a partir da raiz do repositório (o padrão do job é a pasta mobile/).
+        working-directory: ${{ github.workspace }}
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [ -n "$KS_B64" ] || { echo "::error::ANDROID_ROTACAO_APROVADA=true, mas o secret ANDROID_KEYSTORE_BASE64 não existe"; exit 1; }
+          for v in ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            [ -n "${!v}" ] || { echo "::error::secret $v ausente"; exit 1; }
+          done
+          # Aceita os formatos comuns ao colar o secret: quebras de linha, cabeçalho PEM
+          # (-----BEGIN ...-----), prefixo data:...;base64, base64url (-_) e falta de "=".
+          B64="$(printf '%s' "$KS_B64" | sed -e '/^-----/d' -e 's/^data:[^,]*,//' | tr -d '[:space:]' | tr -- '-_' '+/')"
+          while [ $(( ${#B64} % 4 )) -ne 0 ]; do B64="$B64="; done
+          if ! printf '%s' "$B64" | base64 -d > "$RUNNER_TEMP/producao.keystore" 2>/dev/null; then
+            INVALIDOS="$(printf '%s' "$B64" | tr -d 'A-Za-z0-9+/=' | wc -c)"
+            echo "::error::ANDROID_KEYSTORE_BASE64 não é um base64 válido (tamanho ${#KS_B64}, caracteres fora do base64: $INVALIDOS). Gere com: base64 -w0 sua-chave.jks (Linux) ou base64 -i sua-chave.jks (macOS) ou [Convert]::ToBase64String([IO.File]::ReadAllBytes('sua-chave.jks')) (Windows)"
+            exit 1
+          fi
+          export CHAVE_NOVA_KS="$RUNNER_TEMP/producao.keystore"
+          # Diagnóstico sem expor valores: formato do arquivo, senha e alias separadamente.
+          MAGICO="$(head -c 4 "$CHAVE_NOVA_KS" | od -An -tx1 | tr -d ' \n')"
+          case "$MAGICO" in
+            feedfeed) FORMATO="JKS" ;;
+            30*) FORMATO="PKCS12" ;;
+            *) echo "::error::o conteúdo de ANDROID_KEYSTORE_BASE64 não é um keystore (.jks/.p12): foi decodificado, mas o arquivo não tem o formato esperado ($(wc -c < "$CHAVE_NOVA_KS") bytes). Regere o secret a partir do arquivo da chave."; exit 1 ;;
+          esac
+          echo "Keystore $FORMATO ($(wc -c < "$CHAVE_NOVA_KS") bytes)"
+          if ! SAIDA_KT="$(keytool -list -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD 2>&1)"; then
+            echo "::error::ANDROID_KEYSTORE_PASSWORD incorreta para este keystore $FORMATO (keytool: $(echo "$SAIDA_KT" | grep -i 'error' | head -1))"; exit 1
+          fi
+          if ! keytool -list -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>&1; then
+            echo "::error::a senha do keystore está correta, mas o alias em ANDROID_KEY_ALIAS não existe. Aliases no keystore: $(echo "$SAIDA_KT" | grep -iE 'PrivateKeyEntry' | cut -d, -f1 | paste -sd ' ')"; exit 1
+          fi
+          D=mobile/android/app/build/outputs/apk/release
+          UNS="$(ls "$D"/*.apk)"
+          mv "$UNS" "$RUNNER_TEMP/sem-assinatura.apk"
+          bash scripts/android/assinar-com-rotacao.sh "$RUNNER_TEMP/sem-assinatura.apk" "$UNS" \
+            || { echo "::error::falha ao assinar com rotação (confira ANDROID_KEY_PASSWORD)"; exit 1; }
+          SHA="$(keytool -list -v -keystore "$CHAVE_NOVA_KS" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" \
+            | sed -n 's/.*SHA256: //p' | tr -d ':' | tr 'A-F' 'a-f' | head -1)"
+          echo "SHA256_NOVA=$SHA" >> "$GITHUB_ENV"
+          echo "Release assinado com rotação para a chave de produção (SHA-256 $SHA)."
+          rm -f "$RUNNER_TEMP/producao.keystore" "$RUNNER_TEMP/sem-assinatura.apk"
+
+      - name: Verificar APKs (bloqueia a publicação de APK que não atualizaria o app instalado)
+        working-directory: mobile/android/app/build/outputs/apk
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          for apk in debug/*.apk release/*.apk; do
+            echo "== $apk ($(du -h "$apk" | cut -f1))"
+            "$BT/apksigner" verify --print-certs "$apk" | head -6
+            "$BT/aapt2" dump badging "$apk" | grep -E "^(package|sdkVersion|targetSdkVersion|native-code|application-label)" || true
+          done
+          bash "$GITHUB_WORKSPACE/scripts/android/verificar-apk.sh" release/*.apk "$CR_VERSION_CODE"
+          # O release de produção abre somente https://conferenciarapida.com.br (sem localhost e sem Lovable).
+          bash "$GITHUB_WORKSPACE/scripts/android/verificar-dominios.sh" release/*.apk
+          mkdir -p "$GITHUB_WORKSPACE/apk"
+          cp debug/*.apk release/*.apk "$GITHUB_WORKSPACE/apk/"
+          (cd "$GITHUB_WORKSPACE/apk" && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          # Resumo da execução: para conferir a assinatura antes de instalar no celular.
+          {
+            echo "### APK release"
+            echo '```'
+            "$BT/aapt2" dump badging release/*.apk | grep -E "^package"
+            echo "Android 9+  (v3):"; "$BT/apksigner" verify --print-certs --min-sdk-version 28 release/*.apk | grep "SHA-256"
+            echo "Android 7/8 (v2):"; "$BT/apksigner" verify --print-certs --max-sdk-version 27 release/*.apk | grep "SHA-256"
+            echo "Chave de produção esperada: ${SHA256_NOVA:-(não usada nesta execução)}"
+            cat "$GITHUB_WORKSPACE/apk/SHA256SUMS.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conferencia-rapida-apk
+          path: apk/
+          if-no-files-found: error
+
+      - name: Publicar a versão FINAL (somente assinada com a chave de produção)
+        id: publicar_final
+        if: ${{ vars.ANDROID_ROTACAO_APROVADA == 'true' }}
+        working-directory: apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VN="$(ls *-release.apk | sed -E 's/.*-([0-9.]+)-release\.apk/\1/')"
+          TAG="android-v$VN"
+          NOTAS="Conferência Rápida $VN para Android (versionCode $CR_VERSION_CODE, commit ${GITHUB_SHA::7}). Assinado com a chave de produção, com rotação a partir da chave anterior: instala por cima do app atual sem perder dados. Instale o arquivo *-release.apk."
+          gh release delete "$TAG" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create "$TAG" *-release.apk SHA256SUMS.txt --target "$GITHUB_SHA" --latest \
+            --title "Conferência Rápida $VN – Android" --notes "$NOTAS" --repo "$GITHUB_REPOSITORY"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar build de teste na página de Releases (pré-release)
+        if: ${{ vars.ANDROID_ROTACAO_APROVADA != 'true' }}
+        working-directory: apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="android-${GITHUB_REF_NAME//\//-}"
+          NOTAS="Build de TESTE do Conferência Rápida (build ${{ github.run_number }}, commit ${GITHUB_SHA::7}), assinado com a chave antiga. Não é a versão final: a versão final sai assinada com a chave de produção (docs/ANDROID_SIGNING.md)."
+          # Recria a release para apontar sempre para o commit mais recente.
+          gh release delete "$TAG" --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create "$TAG" *.apk SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease \
+            --title "Conferência Rápida – Android ($GITHUB_REF_NAME)" --notes "$NOTAS" --repo "$GITHUB_REPOSITORY"
+
+  # Depois de publicar uma versão FINAL, grava a versão no segredo VERSAO_ANDROID_RELEASE do Worker de
+  # produção (nova versão do Worker com o mesmo código, sem build nem deploy Web). A variável
+  # VERSAO_ANDROID_DEPLOY (do deploy Web) não é tocada; o endpoint usa a maior das duas e, se ela for
+  # maior que a guardada em cache, passa a valer imediatamente.
+  # Usa as mesmas credenciais da Cloudflare do deploy Web; a chave do GitHub não sai do CI.
+  versao-no-worker:
+    needs: build
+    if: ${{ needs.build.outputs.tag_oficial != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy-web
+      cancel-in-progress: false
+    env:
+      APP_DOMAIN: conferenciarapida.com.br
+      WORKER: curyyoliveira-crtech
+      TAG: ${{ needs.build.outputs.tag_oficial }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar a release oficial e montar {versionName, versionCode}
+        id: versao
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ATUAL=$(curl -sf -m 15 "https://$APP_DOMAIN/api/public/versao-android" || true)
+          echo "Versão hoje no endpoint: ${ATUAL:-indisponível}"
+          # --estrito: release ausente, draft, pré-release, tag/versão inválida, sem versionCode
+          # ou versão inferior à publicada → falha aqui e nada é gravado.
+          PAYLOAD=$(npx vite-node scripts/versao-android-deploy.ts --estrito --tag "$TAG" --atual "$ATUAL")
+          echo "$PAYLOAD" | jq -e 'keys == ["versionCode","versionName"]' > /dev/null
+          echo "Será gravado no Worker: $PAYLOAD"
+          echo "payload=$PAYLOAD" >> "$GITHUB_OUTPUT"
+
+      - name: Credenciais da Cloudflare
+        env:
+          TOKEN_BRUTO: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CONTA_BRUTA: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          TOKEN=$(printf '%s' "$TOKEN_BRUTO" | tr -d '[:space:]')
+          CONTA=$(printf '%s' "$CONTA_BRUTA" | grep -oiE '[0-9a-f]{32}' | head -1)
+          if [ -z "$TOKEN" ]; then echo "::error::Segredo CLOUDFLARE_API_TOKEN vazio ou ausente."; exit 1; fi
+          echo "::add-mask::$TOKEN"
+          echo "CLOUDFLARE_API_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          if [ -n "$CONTA" ]; then echo "CLOUDFLARE_ACCOUNT_ID=$CONTA" >> "$GITHUB_ENV"; fi
+
+      - name: Gravar a versão no Worker de produção (segredo VERSAO_ANDROID_RELEASE)
+        env:
+          PAYLOAD: ${{ steps.versao.outputs.payload }}
+        run: |
+          printf '%s' "$PAYLOAD" | npx --yes wrangler@4 secret put VERSAO_ANDROID_RELEASE --name "$WORKER"
+
+      - name: Conferir o endpoint de produção
+        env:
+          PAYLOAD: ${{ steps.versao.outputs.payload }}
+        run: |
+          # A versão gravada, sendo maior que a do cache, vale já na consulta seguinte. A nova versão
+          # do Worker leva alguns segundos para chegar a todos os servidores: tenta por até 2 min.
+          for i in $(seq 1 12); do
+            AGORA=$(curl -sf -m 15 "https://$APP_DOMAIN/api/public/versao-android" || true)
+            echo "Endpoint ($i): ${AGORA:-indisponível}"
+            if [ "$(echo "$AGORA" | jq -c .)" = "$(echo "$PAYLOAD" | jq -c .)" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::O endpoint não passou a responder $PAYLOAD em 2 minutos."
+          exit 1
