@@ -80,9 +80,13 @@ test("lista → prateleira P02 → fileira B: só P02/B entra (nunca P01/B nem P
   await page.goto(`${APP}/conferencia-unica`);
   await page.getByRole("button", { name: /Frota Homologação/ }).click();
 
-  // Lista sem locações de prateleira: nenhuma etapa nova aparece.
+  // As prateleiras vêm só das listas marcadas (sem nenhuma marcada, de todas as do módulo), e só
+  // depois que as locações carregam — por isso espera a contagem real em vez de checar ausência
+  // logo após o clique (corrida que passava por acaso). A lista pequena usa locações
+  // "C01-PA-01": prateleira C01 com os 8 itens e nenhuma prateleira das outras listas.
   await page.getByText(LISTAS.pequena.nome).click();
-  await expect(page.getByTestId("etapa-prateleiras")).toHaveCount(0);
+  await expect(page.getByTestId("prateleira-C01")).toContainText("(8)");
+  await expect(page.getByTestId("prateleira-P02")).toHaveCount(0);
   await page.getByText(LISTAS.pequena.nome).click(); // desmarca
 
   await page.getByText("Homolog Prateleira").click();
