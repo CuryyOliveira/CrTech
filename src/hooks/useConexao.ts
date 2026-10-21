@@ -11,6 +11,7 @@ import {
   progressoOffline,
   type ProgressoOffline,
 } from "@/lib/offline/precarregar";
+import { precarregarFrota } from "@/lib/offline/precarregar-frota";
 import { registrarAuditoria } from "@/lib/audit";
 import { sessaoOffline } from "@/lib/offline/cofre";
 import { hidratarOffline } from "@/lib/offline/idb";
@@ -52,7 +53,9 @@ export function useConexao() {
             acao: "notificacoes_offline_enviadas",
             detalhe: `${notificados} notificação(ões) registrada(s) offline enviada(s) por e-mail`,
           });
-        // Baixa tudo o que os módulos precisam para funcionar sem internet.
+        // Primeiro a Frota de caminhões (segundos), depois tudo o que os módulos precisam
+        // para funcionar sem internet.
+        await precarregarFrota().catch(() => null);
         await precarregarDadosOffline().catch(() => 0);
         await queryClient.invalidateQueries();
         if (enviadas)

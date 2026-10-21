@@ -58,7 +58,8 @@ import {
   type Unidade,
 } from "@/lib/app";
 import { agoraLocalISO, dataLocalISO } from "@/lib/datas";
-import { exportExcel, exportPDF, readSheet } from "@/lib/export";
+import { exportExcel, exportPDF } from "@/lib/export";
+import { ACEITA_ARQUIVO, useLeitorArquivo } from "@/components/ImportarArquivo";
 import { AcessoNegado } from "@/components/AcessoNegado";
 import { usePermissoes } from "@/hooks/usePermissoes";
 import { moduloPorTipo } from "@/lib/permissions";
@@ -97,6 +98,7 @@ function RotaConferenciaV2() {
 function UnidadeDetalhe({ modoV2 }: { modoV2?: ModoV2 } = {}) {
   const { id } = Route.useParams();
   const qc = useQueryClient();
+  const leitor = useLeitorArquivo();
 
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "pendentes" | "conferidos" | "divergencias">(
@@ -330,13 +332,14 @@ function UnidadeDetalhe({ modoV2 }: { modoV2?: ModoV2 } = {}) {
   });
 
   async function importarMateriais(file: File) {
-    let rows: Record<string, unknown>[];
+    let rows: Record<string, unknown>[] | null;
     try {
-      rows = await readSheet(file);
+      rows = await leitor.ler(file);
     } catch (e) {
-      return toast.error(`Não foi possível ler a planilha: ${(e as Error).message}`);
+      return toast.error(`Não foi possível ler o arquivo: ${(e as Error).message}`);
     }
-    if (!rows.length) return toast.error("Planilha vazia");
+    if (!rows) return; // escolha das colunas do PDF cancelada
+    if (!rows.length) return toast.error("Arquivo vazio");
     const colQtd = acharColunaQuantidade(rows);
     if (!colQtd)
       return toast.error(
@@ -782,6 +785,7 @@ function UnidadeDetalhe({ modoV2 }: { modoV2?: ModoV2 } = {}) {
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {leitor.dialogo}
       <header className="sticky top-0 z-10 border-b bg-card/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
           <Button asChild variant="ghost" size="icon">
@@ -869,11 +873,11 @@ function UnidadeDetalhe({ modoV2 }: { modoV2?: ModoV2 } = {}) {
               </Button>
               <Button variant="secondary" size="lg" className="gap-2" asChild>
                 <label>
-                  <FileSpreadsheet className="size-5" /> Importar planilha
+                  <FileSpreadsheet className="size-5" /> Importar arquivo
                   <input
                     type="file"
                     className="hidden"
-                    accept=".xlsx,.xls,.csv"
+                    accept={ACEITA_ARQUIVO}
                     onChange={(e) => {
                       const f = e.target.files?.[0];
                       if (f) importarMateriais(f);

@@ -53,7 +53,8 @@ export default defineConfig(({ command, mode }) => {
       devOptions: { enabled: false },
       workbox: {
         globDirectory: "dist/client",
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest,woff2}"],
+        // mjs: leitor de PDF do "Importar arquivo" (funciona também sem internet).
+        globPatterns: ["**/*.{js,mjs,css,html,ico,png,svg,webmanifest,woff2}"],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: null,
         cleanupOutdatedCaches: true,

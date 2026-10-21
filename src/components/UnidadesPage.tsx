@@ -44,6 +44,7 @@ import {
   type Unidade,
 } from "@/lib/app";
 import { readSheet } from "@/lib/export";
+import { ACEITA_ARQUIVO, useLeitorArquivo } from "@/components/ImportarArquivo";
 import { resolverLegado, type ModuloResolvido } from "@/lib/modulos";
 import { type ModuloId } from "@/lib/permissions";
 
@@ -80,6 +81,7 @@ export function UnidadesPage({ modulo, alvo }: { modulo?: ModuloId; alvo?: Modul
   const [alvoExcluir, setAlvoExcluir] = useState<Unidade | null>(null);
   const [resumo, setResumo] = useState<ResumoImportacao | null>(null);
   const [destinoResumo, setDestinoResumo] = useState<string | null>(null);
+  const leitor = useLeitorArquivo();
 
 
 
@@ -252,13 +254,14 @@ export function UnidadesPage({ modulo, alvo }: { modulo?: ModuloId; alvo?: Modul
 
 
   async function importarPrateleira(file: File, nomeLista: string) {
-    let rows: Record<string, unknown>[];
+    let rows: Record<string, unknown>[] | null;
     try {
-      rows = await readSheet(file);
+      rows = await leitor.ler(file);
     } catch (e) {
-      return toast.error(`Não foi possível ler a planilha: ${(e as Error).message}`);
+      return toast.error(`Não foi possível ler o arquivo: ${(e as Error).message}`);
     }
-    if (!rows.length) return toast.error("Planilha vazia");
+    if (!rows) return; // escolha das colunas do PDF cancelada
+    if (!rows.length) return toast.error("Arquivo vazio");
     const colQtd = acharColunaQuantidade(rows);
     if (!colQtd) return toast.error(ERRO_COLUNA);
 
@@ -375,6 +378,7 @@ export function UnidadesPage({ modulo, alvo }: { modulo?: ModuloId; alvo?: Modul
 
               {familia === "prateleira" ? (
                 <div className="space-y-3">
+                  {leitor.dialogo}
                   <div>
                     <Label>Título da lista</Label>
                     <Input
@@ -384,10 +388,12 @@ export function UnidadesPage({ modulo, alvo }: { modulo?: ModuloId; alvo?: Modul
                     />
                   </div>
                   <div>
-                    <Label>Importar planilha (descrição, locação, código, qtd. do sistema)</Label>
+                    <Label>
+                      Importar arquivo — Excel ou PDF (descrição, locação, código, qtd. do sistema)
+                    </Label>
                     <Input
                       type="file"
-                      accept=".xlsx,.xls,.csv"
+                      accept={ACEITA_ARQUIVO}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (!f) return;

@@ -13,6 +13,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { ConferenceScreen } from "@/components/conferencia-v2/ConferenceScreen";
 import { AvisoNovaVersao } from "@/components/AvisoNovaVersao";
+import { ACEITA_ARQUIVO, useLeitorArquivo } from "@/components/ImportarArquivo";
 import { MotorSync } from "@/lib/sync-v2/motor";
 import { encerrada } from "@/lib/sync-v2/projecao";
 import { redeSimulada, TransporteHttp } from "./transporte-http";
@@ -182,9 +183,39 @@ function Vitrine() {
   );
 }
 
+/** ?importar=1: o "Importar arquivo" das listas (Excel direto; PDF com escolha das colunas). */
+function Importar() {
+  const leitor = useLeitorArquivo();
+  const [resultado, setResultado] = useState("");
+  return (
+    <main className="p-4">
+      {leitor.dialogo}
+      <label>
+        Importar arquivo
+        <input
+          type="file"
+          accept={ACEITA_ARQUIVO}
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            try {
+              const linhas = await leitor.ler(f);
+              setResultado(linhas === null ? "cancelado" : JSON.stringify(linhas));
+            } catch (erro) {
+              setResultado(`erro: ${(erro as Error).message}`);
+            }
+          }}
+        />
+      </label>
+      <pre data-testid="resultado-importacao">{resultado}</pre>
+    </main>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {params.get("vitrine") ? <Vitrine /> : <App />}
+    {params.get("vitrine") ? <Vitrine /> : params.get("importar") ? <Importar /> : <App />}
     <Toaster position="top-center" />
   </StrictMode>,
 );

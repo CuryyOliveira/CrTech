@@ -12,7 +12,7 @@ import { gravarLocal, hidratarOffline, lerLocal } from "./idb";
 
 const sb = supabase as unknown as { from: (t: string) => any };
 
-type Tabela = {
+export type Tabela = {
   tabela: string;
   rotulo: string;
   /** Coluna usada para o delta sync (null = tabela pequena, recarrega inteira). */
@@ -21,7 +21,7 @@ type Tabela = {
 };
 
 /** Tabelas replicadas localmente, na ordem em que são baixadas. */
-const TABELAS: Tabela[] = [
+export const TABELAS: Tabela[] = [
   { tabela: "user_profiles", rotulo: "Perfis de acesso", delta: "updated_at" },
   { tabela: "permissoes_perfil", rotulo: "Permissões", delta: "updated_at" },
   { tabela: "permissoes_usuario", rotulo: "Permissões do usuário", delta: "updated_at" },
@@ -69,7 +69,8 @@ let progresso: ProgressoOffline = {
 
 const ouvintes = new Set<(p: ProgressoOffline) => void>();
 
-function atualizar(p: Partial<ProgressoOffline>) {
+/** Também usado pela sincronização rápida da Frota (mesmo indicador na tela). */
+export function atualizar(p: Partial<ProgressoOffline>) {
   progresso = { ...progresso, ...p };
   for (const fn of ouvintes) fn(progresso);
 }
@@ -109,7 +110,7 @@ function maiorValor(linhas: Linha[], coluna: string) {
 }
 
 /** Baixa uma tabela em páginas, aplicando o filtro incremental quando existir. */
-async function baixarTabela({ tabela, delta, limite }: Tabela) {
+export async function baixarTabela({ tabela, delta, limite }: Tabela) {
   const desde = delta ? marcas()[tabela] : undefined;
   const teto = limite ?? 10000;
   let de = 0;

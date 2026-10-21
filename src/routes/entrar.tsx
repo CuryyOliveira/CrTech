@@ -16,6 +16,15 @@ import { abrirSessaoOffline, cofreExiste, encerrarSessaoOffline, salvarCofre, va
 import { encerrarSessaoLocal } from "@/hooks/useSessao";
 import { prepararCacheParaUsuario } from "@/lib/offline/dono";
 import { precarregarDadosOffline } from "@/lib/offline/precarregar";
+import {
+  precarregarFrota,
+  resumoFrotaLocal,
+  ultimaPrecargaFrota,
+  type ResultadoFrota,
+} from "@/lib/offline/precarregar-frota";
+import { hidratarOffline } from "@/lib/offline/idb";
+import { useOffline } from "@/hooks/useOffline";
+import { fmtDataHoraLocal } from "@/lib/datas";
 import { db } from "@/lib/app";
 import { erroDeRede } from "@/lib/offline/estado";
 
@@ -169,8 +178,12 @@ function Login() {
       console.warn("[cofre] Cofre salvo sem perfil/unidades (consulta falhou)", e);
     }
 
-    // Baixa em segundo plano todas as listas/materiais para uso offline.
-    void precarregarDadosOffline().catch(() => 0);
+    // Baixa em segundo plano, primeiro a Frota de caminhões (pronta para o offline em
+    // segundos) e depois todas as demais listas/materiais, como sempre.
+    void precarregarFrota({ forcar: true })
+      .catch(() => null)
+      .then(() => precarregarDadosOffline())
+      .catch(() => 0);
   }
 
   async function entrar() {
@@ -272,7 +285,7 @@ function Login() {
             divergências e assinatura digital.
           </p>
           <ul className="space-y-2 text-sm text-muted-foreground">
-            <li>• Importe a lista de materiais em Excel e confira item por item</li>
+            <li>• Importe a lista de materiais em Excel ou PDF e confira item por item</li>
             <li>• Funciona offline no celular e sincroniza ao voltar a conexão</li>
             <li>• Histórico, auditoria e relatórios em Excel e PDF</li>
             <li>• Módulos, setores e permissões configuráveis por empresa</li>
@@ -340,6 +353,7 @@ function Login() {
               >
                 Esqueci minha senha
               </button>
+              <FrotaNoAparelho />
             </TabsContent>
 
             <TabsContent value="criar" className="space-y-3 pt-4">
@@ -387,5 +401,28 @@ function Login() {
       <RodapeLegal />
     </div>
 
+  );
+}
+
+/** Sem internet: o que da Frota de caminhões já está no aparelho para o acesso offline. */
+function FrotaNoAparelho() {
+  const offline = useOffline();
+  const [frota, setFrota] = useState<(ResultadoFrota & { em: string | null }) | null>(null);
+  useEffect(() => {
+    if (!offline) return;
+    void hidratarOffline().then(() =>
+      setFrota({ ...resumoFrotaLocal(), em: ultimaPrecargaFrota() }),
+    );
+  }, [offline]);
+  if (!offline || !frota) return null;
+  return (
+    <p
+      className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground"
+      data-testid="frota-no-aparelho"
+    >
+      {frota.listas
+        ? `Sem internet: Frota de caminhões disponível no aparelho — ${frota.listas} lista(s), ${frota.materiais} material(is)${frota.em ? `, atualizada em ${fmtDataHoraLocal(frota.em)}` : ""}.`
+        : "Sem internet e sem a Frota de caminhões neste aparelho. Entre uma vez com internet para baixá-la."}
+    </p>
   );
 }

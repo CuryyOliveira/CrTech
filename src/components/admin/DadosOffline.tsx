@@ -18,6 +18,12 @@ import {
   type ProgressoOffline,
 } from "@/lib/offline/precarregar";
 import { useOffline } from "@/hooks/useOffline";
+import {
+  precarregarFrota,
+  resumoFrotaLocal,
+  ultimaPrecargaFrota,
+  type ResultadoFrota,
+} from "@/lib/offline/precarregar-frota";
 
 /** Cadastros que o usuário acompanha de perto no uso offline. */
 const DESTAQUES = [
@@ -37,10 +43,18 @@ export function DadosOffline() {
   const [ultima, setUltima] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<ProgressoOffline>(progressoOffline());
   const [baixando, setBaixando] = useState(false);
+  const [frota, setFrota] = useState<ResultadoFrota & { em: string | null }>({
+    listas: 0,
+    materiais: 0,
+    conferencias: 0,
+    em: null,
+  });
+  const [baixandoFrota, setBaixandoFrota] = useState(false);
 
   const recarregar = useCallback(() => {
     setResumo(resumoLocal());
     setUltima(ultimaPrecarga());
+    setFrota({ ...resumoFrotaLocal(), em: ultimaPrecargaFrota() });
   }, []);
 
   useEffect(() => {
@@ -69,6 +83,27 @@ export function DadosOffline() {
       toast.error("Não foi possível atualizar os dados offline.");
     } finally {
       setBaixando(false);
+    }
+  }
+
+  async function baixarFrota() {
+    if (offline) {
+      toast.error("Sem internet agora. Conecte-se para atualizar a Frota.");
+      return;
+    }
+    setBaixandoFrota(true);
+    try {
+      const r = await precarregarFrota({ forcar: true });
+      recarregar();
+      toast.success(
+        r
+          ? `Frota de caminhões pronta offline: ${r.listas} lista(s), ${r.materiais} material(is).`
+          : "Atualização da Frota já em andamento.",
+      );
+    } catch {
+      toast.error("Não foi possível atualizar a Frota de caminhões.");
+    } finally {
+      setBaixandoFrota(false);
     }
   }
 
@@ -103,6 +138,29 @@ export function DadosOffline() {
               <Progress value={pct} />
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3 p-4">
+          <div className="text-sm">
+            <p className="font-semibold">Sincronização rápida — Frota de caminhões</p>
+            <p className="text-xs text-muted-foreground">
+              {frota.listas
+                ? `${frota.listas} lista(s), ${frota.materiais} material(is) e ${frota.conferencias} conferência(s) no aparelho`
+                : "Ainda não baixada neste aparelho"}
+              {frota.em ? ` · atualizada em ${fmtDataHoraLocal(frota.em)}` : ""}
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            className="ml-auto"
+            onClick={baixarFrota}
+            disabled={baixandoFrota || offline}
+          >
+            <Download className={`mr-2 size-4 ${baixandoFrota ? "animate-pulse" : ""}`} />
+            {baixandoFrota ? "Baixando…" : "Baixar só a Frota"}
+          </Button>
         </CardContent>
       </Card>
 
