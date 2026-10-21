@@ -27,6 +27,8 @@ import { compressImage, db, fmtDateTime } from "@/lib/app";
 import { registrarAuditoria } from "@/lib/audit";
 import { limparDadosTeste } from "@/lib/limpeza.functions";
 import { AssistenteEnvioEmail } from "@/components/admin/AssistenteEnvioEmail";
+import { AssistenteTeams, CHAVE_STATUS_TEAMS } from "@/components/admin/AssistenteTeams";
+import { obterStatusTeams } from "@/lib/teams.functions";
 import {
   CONFIG_GERAL_PADRAO,
   CONFIG_SEGURANCA_PADRAO,
@@ -74,6 +76,8 @@ export function AdministracaoSistema() {
               <EmailsConferenciaForm />
               <ConfigAlertasForm />
             </div>
+          ) : c.id === "teams" ? (
+            <AssistenteTeams />
           ) : c.id === "seguranca" ? (
             <ConfigSegurancaForm />
           ) : c.id === "integracoes" ? (
@@ -553,17 +557,30 @@ function Integracoes() {
     },
   });
 
+  // Teams operacional quando o teste de conexão foi aprovado (aba Microsoft Teams).
+  const { data: teams } = useQuery({
+    queryKey: CHAVE_STATUS_TEAMS,
+    queryFn: () => obterStatusTeams({ data: undefined as never }),
+    retry: false,
+  });
+
   if (isLoading) return <Carregando />;
 
   const lista = INTEGRACOES_FUTURAS.map((i) => ({
     ...i,
     registro: registros.find((r) => r.tipo === i.tipo),
   }));
+  const rotulo = (i: (typeof lista)[number]) => {
+    if (i.tipo === "teams")
+      return teams?.liberado && teams.ativo ? "Operacional" : "Configurar na aba Microsoft Teams";
+    return i.registro?.ativo ? "Ativa" : "Preparada";
+  };
 
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Arquitetura preparada para as integrações abaixo. A ativação será feita em uma fase futura.
+        Arquitetura preparada para as integrações abaixo. O Microsoft Teams é configurado na aba
+        Microsoft Teams; as demais serão ativadas em uma fase futura.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         {lista.map((i) => (
@@ -573,7 +590,16 @@ function Integracoes() {
                 <p className="font-semibold">{i.nome}</p>
                 <p className="text-xs text-muted-foreground">{i.descricao}</p>
               </div>
-              <Badge variant="outline">{i.registro?.ativo ? "Ativa" : "Preparada"}</Badge>
+              <Badge
+                variant="outline"
+                className={
+                  rotulo(i) === "Operacional"
+                    ? "border-emerald-600 text-emerald-700 dark:text-emerald-400"
+                    : undefined
+                }
+              >
+                {rotulo(i)}
+              </Badge>
             </CardContent>
           </Card>
         ))}

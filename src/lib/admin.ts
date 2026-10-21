@@ -206,6 +206,7 @@ export const SISTEMA_CATEGORIAS = [
   { id: "usuarios", titulo: "Usuários e Permissões" },
   { id: "operacao", titulo: "Operação" },
   { id: "notificacoes", titulo: "Notificações" },
+  { id: "teams", titulo: "Microsoft Teams" },
   { id: "seguranca", titulo: "Segurança" },
   { id: "integracoes", titulo: "Integrações" },
   { id: "banco", titulo: "Banco de Dados" },

@@ -6,7 +6,7 @@ import { NIVEL_ADMIN, temNivel, type Perfil } from "@/lib/permissions";
 type Ctx = { supabase: any; userId: string };
 
 /** Só administradores (e acima) podem disparar, reenviar ou diagnosticar e-mails. */
-async function exigirAdmin(context: Ctx) {
+export async function exigirAdmin(context: Ctx) {
   const { data, error } = await context.supabase
     .from("user_profiles")
     .select("perfil,bloqueado")

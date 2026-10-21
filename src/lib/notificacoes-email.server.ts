@@ -165,11 +165,26 @@ async function enviarComRetry(
   throw ultimo;
 }
 
-/** Envia (ou reenvia) o e-mail de uma notificação e registra cada tentativa. */
+/**
+ * Envia (ou reenvia) o e-mail de uma notificação e, em seguida, o card no Microsoft Teams.
+ * O Teams é idempotente (um envio por notificação) e nunca impede nem altera o e-mail.
+ */
 export async function enviarNotificacao(
   notificacaoId: string,
   reenvio = false,
 ): Promise<Resultado> {
+  const r = await enviarEmail(notificacaoId, reenvio);
+  try {
+    const { enviarTeamsNotificacao } = await import("@/lib/teams-envio.server");
+    await enviarTeamsNotificacao(notificacaoId);
+  } catch {
+    /* Teams nunca impede o e-mail */
+  }
+  return r;
+}
+
+/** Envia (ou reenvia) o e-mail de uma notificação e registra cada tentativa. */
+async function enviarEmail(notificacaoId: string, reenvio: boolean): Promise<Resultado> {
   const sb = await admin();
   const { data: notif } = await sb
     .from("notificacoes_conferencia")
@@ -309,8 +324,8 @@ async function marcarEnvio(
 
 /**
  * Processa uma notificação criada pelo banco (início, conclusão, divergência): atualiza o
- * relatório com os dados confirmados no servidor, envia o e-mail (sem duplicar) e, para início e
- * conclusão, o WhatsApp da empresa (também idempotente). Nunca lança erro.
+ * relatório com os dados confirmados no servidor, envia o e-mail e o Teams (sem duplicar) e, para
+ * início e conclusão, o WhatsApp da empresa (também idempotente). Nunca lança erro.
  */
 export async function processarNotificacaoServidor(notificacaoId: string): Promise<string> {
   try {

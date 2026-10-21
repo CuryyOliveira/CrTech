@@ -248,7 +248,11 @@ export const INTEGRACOES_FUTURAS: { tipo: string; nome: string; descricao: strin
     nome: "Power BI",
     descricao: "Exportação de indicadores para painéis externos",
   },
-  { tipo: "teams", nome: "Microsoft Teams", descricao: "Envio de alertas para canais da equipe" },
+  {
+    tipo: "teams",
+    nome: "Microsoft Teams",
+    descricao: "Notificações de conferência no chat do Teams",
+  },
   { tipo: "whatsapp", nome: "WhatsApp", descricao: "Alertas críticos por mensagem" },
   { tipo: "slack", nome: "Slack", descricao: "Alertas em canais de operação" },
   { tipo: "api_rest", nome: "API REST", descricao: "Consumo externo dos dados operacionais" },

@@ -4,8 +4,8 @@
  * Chamado pelo próprio banco logo depois do COMMIT que confirma a criação/finalização (pg_net,
  * corpo `{ id }`) e, a cada 2 minutos, pelo agendador (corpo `{}`) para reprocessar o que ficou
  * pendente (queda, timeout, erro do provedor). Não depende do aparelho continuar aberto.
- * Chamadas repetidas ou simultâneas não duplicam e-mails: cada destinatário é reservado no banco
- * antes do envio (ver `enviarNotificacao`).
+ * Chamadas repetidas ou simultâneas não duplicam e-mails nem cards do Teams: cada envio é
+ * reservado no banco antes de sair (ver `enviarNotificacao`).
  */
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -47,9 +47,14 @@ export const Route = createFileRoute("/api/public/hooks/notificacoes")({
           .gt("created_at", new Date(Date.now() - 48 * 3600_000).toISOString())
           .order("created_at", { ascending: true })
           .limit(LOTE);
+        // Envios ao Teams que falharam ou travaram (o e-mail pode já ter saído).
+        const { teamsPendentes } = await import("@/lib/teams-envio.server");
         const ids = [
-          ...(pedido ? [pedido] : []),
-          ...((pendentes ?? []) as { id: string }[]).map((r) => r.id).filter((id) => id !== pedido),
+          ...new Set([
+            ...(pedido ? [pedido] : []),
+            ...((pendentes ?? []) as { id: string }[]).map((r) => r.id),
+            ...(await teamsPendentes()),
+          ]),
         ];
 
         const { processarNotificacaoServidor } = await import("@/lib/notificacoes-email.server");
